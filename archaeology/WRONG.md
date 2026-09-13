@@ -392,13 +392,14 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-08T00:56:31Z -- Use triton==2.0.0 (#1053) (`38e990d8`)
 
-**Reason:** Immediately followed by fix commit 919a713
+**Reason:** Immediately followed by fix commit 919a7134 ("attempt to fix the repetition/hallucination issue identified in #1046 (#1052)") touching overlapping files (`whisper.ts`).
+**Fixed by:** `919a7134` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 Use triton==2.0.0 (#1053)
 
 ```
@@ -418,14 +419,14 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-01-27T08:01:49Z -- clarify that 3.11 is not supported (`5c1a8c10`)
 
-**Reason:** Immediately followed by fix commit 7858aa9c ("Fix infinite loop caused by incorrect timestamp tokens prediction (#914)") touching overlapping files (whisper.ts)
-**Fixed by:** `7858aa9c` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit 7858aa9c ("Fix infinite loop caused by incorrect timestamp tokens prediction (#914)") touching overlapping files (`whisper.ts`).
+**Fixed by:** `7858aa9c` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 clarify that 3.11 is not supported
 
 ```
@@ -445,14 +446,14 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-01-18T18:30:18Z -- verbose outputs from pytest (`8135a7c3`)
 
-**Reason:** Immediately followed by fix commit ea1c2667 ("Fix bug where mm is mistakenly replaced with hmm in e.g. 20mm (#659)") touching overlapping files (whisper.ts)
-**Fixed by:** `ea1c2667` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit ea1c2667 ("Fix bug where mm is mistakenly replaced with hmm in e.g. 20mm (#659)") touching overlapping files (`whisper.ts`).
+**Fixed by:** `ea1c2667` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 verbose outputs from pytest
 
 ```
@@ -472,8 +473,7 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-01-10T18:53:18Z -- torch.concatenate -> torch.cat for compatibility (`f82bc59f`)
 
-**Reason:** Immediately followed by fix commit 70861c7c ("Fix tiny transcribe() docstring typo (#857)") touching overlapping files (whisper.ts)
-**Fixed by:** `70861c7c` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit 70861c7c ("Fix tiny
 
 **Files touched:**
 - `whisper.ts`
