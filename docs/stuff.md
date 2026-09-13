@@ -5,42 +5,39 @@
 ## Deterministic patterns
 
 **Most-touched files (Architectural hotspots):**
-- `app.py` — 3 commits
 - `server.ts` — 3 commits
-- `docs/AUTH.md` — 1 commits
+- `app.py` — 3 commits
 - `config.ts` — 1 commits
+- `docs/AUTH.md` — 1 commits
 
 **Files with iterative wrong->correct cycles (Hard-won lessons):**
-- `app.py` — 1 failed-and-fixed cycles
 - `server.ts` — 1 failed-and-fixed cycles
+- `app.py` — 1 failed-and-fixed cycles
 
 **Recurring themes in commit subjects:**
 - `middleware` — 4 commits
 - `auth` — 2 commits
 - `validation` — 2 commits
-- `feature` — 1 commits
-- `trying` — 1 commits
-- `inline` — 1 commits
+- `config` — 1 commits
+- `loader` — 1 commits
+- `document` — 1 commits
 
 --- 
 
 ## LLM-surfaced patterns (Gemini)
 
-### Commit Archaeology Report: Session Analysis 2026-09-13
+The Commit Archaeology Engine (CAE) has completed its analysis of the provided git digest. The following observations detail the technical evolution and recurring patterns identified in the repository history.
 
-The following analysis examines the progression of work across the provided commit history, focusing on technical debt patterns, implementation strategies, and evolution of the repository structure.
+### 1. Architectural Hotspots and Failure Classes
+*   **Middleware Ordering and Encapsulation:** The primary technical friction point involves the placement and structure of middleware. The history reveals two distinct failure cycles (commits `234ab33d` and `34b1ec41`) centered on the implementation of cross-cutting concerns (JWT validation and middleware chains).
+*   **Failure Pattern - "Trial-and-Error Implementation":** The repository exhibits a recurring pattern of attempting direct, inline implementation (`wip: trying inline jwt validation`) followed by a corrective refactor to externalize logic into middleware (`fix: extract jwt validation into middleware`). This suggests the codebase initially matures through iterative decoupling.
+*   **Dependency on External Sequencing:** The reliance on specific middleware registration order in `server.ts` acts as a recurring failure point, requiring explicit reordering to achieve functional correctness.
 
-*   **Architectural Hotspots and Recurring Failure Classes**
-    *   **Middleware Implementation:** Middleware registration represents a consistent technical bottleneck. Both Python (`app.py`) and TypeScript (`server.ts`) implementations required immediate iterative fixes following initial attempts.
-    *   **Validation Logic Placement:** The transition from inline logic to abstracted middleware is a recurring pattern. Commits `34b1ec41` and `7689035e` indicate a struggle with code encapsulation where logic was initially coupled to the main application flow before being extracted.
-    *   **Registration Ordering:** In `server.ts`, the need to explicitly fix the "reorder middleware registration" (`5e4e56be`) indicates that the system architecture is sensitive to the execution sequence of the middleware stack.
+### 2. Skill Growth and Evolution
+*   **Increased Abstraction Capability:** The transition from `app.py` (early phase) to `server.ts` (later phase) demonstrates a shift in implementation strategy. The developer transitioned from experimenting with inline logic to adopting standardized middleware patterns, indicating an increased comfort level with the underlying framework architecture.
+*   **Proactive Documentation Habits:** The sequence of commits demonstrates an evolution toward systemic awareness. The creation of `docs/AUTH.md` immediately following server configuration suggests a progression from purely implementation-focused work to maintaining technical context for complex subsystems.
 
-*   **Skill Growth and Procedural Evolution**
-    *   **Refinement of Implementation Strategy:** The developer demonstrates a clear "prototype-then-abstract" workflow. The movement from `wip` or `attempt` commits to `fix` commits indicates a recognition of the need for modularity, even if the initial implementation attempts are suboptimal.
-    *   **Transition from Ad-hoc to Configurable Design:** The final commits (`f7e8d9c0`, `b3a4c5d6`) show a pivot toward system stabilization. The addition of documentation (`AUTH.md`) and a dedicated configuration loader suggests a shift from feature-focused coding to infrastructure-level concerns.
-    *   **Language-Specific Handling:** The developer applied lessons learned from the `app.py` implementation to `server.ts`, mirroring the structure of authentication logic across different runtimes (Python/Flask-like to Node/Express-like).
-
-*   **Key Architectural Decisions and Hard-won Lessons**
-    *   **Extraction over Inline Logic:** The developer learned that inline validation is unsustainable. The correction of `34b1ec41` by `7689035e` marks a shift toward a clean separation of concerns.
-    *   **Infrastructure Prioritization:** The sequence from server scaffolding to configuration loading signifies a hardening of the system’s foundation. The developer moved away from feature-coding to address dependency and environmental management (`config.ts`).
-    *   **Dependency on Sequence:** The reordering fix in the Express middleware chain confirms that the middleware architecture follows a linear, sequence-dependent execution path, necessitating rigid ordering constraints to maintain system stability.
+### 3. Architectural Decisions and Lessons
+*   **Decoupling Logic from Routing:** A clear trajectory exists from inline authentication logic (commit `42f941a8`) to modularized, middleware-based validation (commit `7689035e`). The "hard-won lesson" identified here is that inline logic in early-stage routing files (`app.py`) creates technical debt that necessitates immediate refactoring.
+*   **Externalized Configuration:** The final action in the digest (addition of a `config loader`) signals a decision to separate operational configuration from application logic. This indicates a shift away from hardcoded server parameters, likely in response to the preceding integration hurdles encountered during middleware configuration.
+*   **Environment Bifurcation:** The existence of both `app.py` and `server.ts` suggests a multi-language or multi-environment architecture, though the history implies a shared pattern of migrating from "attempted inline logic" to "structured middleware" across both environments.
