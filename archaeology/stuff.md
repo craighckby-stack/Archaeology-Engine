@@ -5,38 +5,38 @@
 ## Deterministic patterns
 
 **Most-touched files (Architectural hotspots):**
-- `server.ts` — 3 commits
-- `app.py` — 3 commits
-- `config.ts` — 1 commits
-- `docs/AUTH.md` — 1 commits
+- `src/core/engine.ts` — 1 commits
+- `src/query/bufferPool.ts` — 1 commits
+- `src/security/sanitizer.ts` — 1 commits
+- `src/ui/Dashboard.tsx` — 1 commits
+- `package.json` — 1 commits
 
 **Files with iterative wrong->correct cycles (Hard-won lessons):**
-- `server.ts` — 1 failed-and-fixed cycles
-- `app.py` — 1 failed-and-fixed cycles
+- No recorded failure cycles detected in this corpus.
 
 **Recurring themes in commit subjects:**
-- `middleware` — 4 commits
-- `auth` — 2 commits
-- `validation` — 2 commits
-- `config` — 1 commits
-- `loader` — 1 commits
-- `document` — 1 commits
+- `core` — 2 commits
+- `release` — 1 commits
+- `architecture` — 1 commits
+- `overhaul` — 1 commits
+- `state` — 1 commits
+- `machine` — 1 commits
 
 --- 
 
 ## LLM-surfaced patterns (Gemini)
 
-The Commit Archaeology Engine (CAE) has completed its analysis of the provided git digest. The following observations outline the development trajectory and structural patterns identified within the repository history.
+As the Commit Archaeology Engine (CAE), I have analyzed the provided 5-commit sequence. The following patterns have been surfaced based on the provided metadata:
 
-*   **Architectural Hotspots and Failure Classes**
-    *   **Middleware Ordering/Configuration:** The `server.ts` file experienced a failure (234ab33d) and a subsequent corrective commit (5e4e56be) directly related to the sequencing of the middleware chain. This indicates a dependency on execution order that was not resolved by the initial implementation attempt.
-    *   **Authentication Logic:** The `app.py` module served as a focal point for iterative refinement, specifically regarding JWT validation. The transition from inline logic (34b1ec41) to extracted middleware (7689035e) marks a failure-to-correction cycle focused on architectural cleanliness and separation of concerns.
+*   **Architectural Hotspots and System Evolution**
+    *   **Foundation to Execution:** The project shifted rapidly from initial scaffolding (Commit `4e0b9872`) to functional UI features (Commit `5d1c0983`) before pivoting to low-level systems optimization. The final state (Commit `8a4f91c6`) indicates a shift toward a state machine-driven architecture, suggesting the initial scaffold was insufficient for complex logic flows.
+    *   **Focus on Stream Performance:** The introduction of zero-alloc buffer pooling (Commit `7b3e21a5`) indicates a specific architectural priority for handling high-throughput data streams, likely addressing memory pressure concerns in the query layer.
 
-*   **Skill Growth and Evolution**
-    *   **Refactoring Capability:** The history demonstrates a pattern of "Test-then-Refactor." The author identifies a functional implementation (e.g., inline validation), recognizes it as suboptimal, and successfully extracts the logic into more maintainable structures (middleware). 
-    *   **Documentation Maturity:** The transition from early structural coding (08:30) to the addition of `docs/AUTH.md` (11:30) suggests an evolution in development process, moving from code-first implementation to maintaining architectural documentation as the system footprint increases.
+*   **Skill Growth and Technical Trajectory**
+    *   **Progressive Security Hardening:** The transition from feature implementation (`5d1c0983`) to security remediation (`6c2d1094`) suggests an evolving awareness of data handling requirements, moving from surface-level UI implementation to backend sanitization protocols.
+    *   **Pattern Maturity:** The project moved from generic scaffolding to domain-specific engineering, demonstrated by the progression from standard UI components to specialized memory management (buffer pooling) and custom state engine implementation.
 
 *   **Key Architectural Decisions and Lessons**
-    *   **Standardization of Authentication:** The repeated focus on JWT validation and authentication flows across both `app.py` and `server.ts` indicates a prioritization of security infrastructure as the foundation of the system.
-    *   **Dependency on Config:** The final commit (b3a4c5d6) introduces a `config.ts` loader. This indicates a progression toward externalizing hardcoded variables, likely learned as a response to the rigid structures observed in the preceding `server.ts` and `app.py` commits. 
-    *   **Failure Pattern Recognition:** The author consistently uses descriptive subject prefixes ("attempt:", "wip:", "fix:") to denote trial-and-error phases. This practice reveals a self-correcting development cycle where the author acknowledges architectural dead-ends before finalizing the implementation.
+    *   **Prioritization of Memory Management:** By implementing zero-alloc buffer pooling shortly after the initial feature set, the development process prioritized resource efficiency as a foundational requirement rather than a post-launch optimization.
+    *   **Transition to State-Driven Design:** The overhaul in Commit `8a4f91c6` confirms a decision to move away from implicit state handling toward a formal state machine engine. This indicates that the initial development phase likely uncovered race conditions or state synchronization challenges that necessitated a more rigid architectural framework.
+    *   **Iterative Hardening:** The sequencing of the security patch after the dashboard feature launch highlights a development loop where infrastructure/security needs are identified through the requirements of the frontend interface.
