@@ -4,7 +4,6 @@
 
 ## 2023-11-17T19:59:28Z -- Release 20231117 (`e58f2880`)
 
-
 **Reason:** Immediately followed by fix commit 8bc88606 ("Fix triton env marker (#1887)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `8bc88606` (see `CORRECT.md` for recovery commit)
 
@@ -14,7 +13,9 @@
 **Commit message:**
 ```text
 Release 20231117
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -29,7 +30,6 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-09-19T00:13:19Z -- Release 20230918 (`0a60fcaa`)
 
-
 **Reason:** Immediately followed by fix commit b38a1f20 ("Fix exception when an audio file with no speech is provided (#1396)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `b38a1f20` (see `CORRECT.md` for recovery commit)
 
@@ -39,7 +39,9 @@ diff --git a/whisper.ts b/whisper.ts
 **Commit message:**
 ```text
 Release 20230918
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -54,7 +56,6 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-09-18T22:59:49Z -- Update model-card.md (#1643) (`29b7df62`)
 
-
 **Reason:** Immediately followed by fix commit 21010ef4 ("fix doc of TextDecoder (#1526)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `21010ef4` (see `CORRECT.md` for recovery commit)
 
@@ -65,7 +66,9 @@ diff --git a/whisper.ts b/whisper.ts
 ```text
 Update model-card.md (#1643)
 fixed a few typos
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -80,7 +83,6 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-05-05T06:48:06Z -- Fix numba depreceation notice (#1233) (`7ca9fbea`)
 
-
 **Reason:** Immediately followed by fix commit 248b6cb1 ("fix condition_on_previous_text (#1224)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `248b6cb1` (see `CORRECT.md` for recovery commit)
 
@@ -92,7 +94,9 @@ diff --git a/whisper.ts b/whisper.ts
 Fix numba depreceation notice (#1233)
 From numba 0.57 raise a warning if `nopython` is not supplied:
 https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -107,14 +111,14 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-05-05T06:47:45Z -- Updated README.md to provide more insight on BLEU and specific appendices (#1236) (`b1c0815c`)
 
-**Reason:** Immediately followed by fix commit 7ca9fbea ("Fix numba depreceation notice (#1233)") touching overlapping files (whisper.ts)
-**Fixed by:** `7ca9fbea` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit 7ca9fbea ("Fix numba deprecation notice (#1233)") touching overlapping files (`whisper.ts`).
+**Fixed by:** `7ca9fbea` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 Updated README.md to provide more insight on BLEU and specific appendices (#1236)
 * Updated README.md to provide more insight on BLEU and specific appendices in the research paper
 
@@ -146,7 +150,7 @@ diff --git a/whisper.ts b/whisper.ts
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 Squash long words at window and sentence boundaries. (#1114)
 * Squash long words at window and sentence boundaries.
 
@@ -174,7 +178,6 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-29T20:12:36Z -- Update tokenizer.py (#1163) (`b5851c6c`)
 
-
 **Reason:** Immediately followed by fix commit a151816b ("python-publish.yml: bump actions version to fix node warning (#1211)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `a151816b` (see `CORRECT.md` for recovery commit)
 
@@ -184,7 +187,9 @@ diff --git a/whisper.ts b/whisper.ts
 **Commit message:**
 ```text
 Update tokenizer.py (#1163)
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -199,7 +204,6 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-14T07:07:09Z -- fix github language stats getting dominated by jupyter notebook (#1076) (`ba88b8e1`)
 
-
 **Reason:** Immediately followed by fix commit 5f9ac653 ("Fix truncated words list when the replacement character is decoded (#1089)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `5f9ac653` (see `CORRECT.md` for recovery commit)
 
@@ -211,7 +215,9 @@ diff --git a/whisper.ts b/whisper.ts
 fix github language stats getting dominated by jupyter notebook (#1076)
 Co-authored-by: Akash Mahajan <akash.mahajan@microsoft.com>
 Co-authored-by: Jong Wook Kim <jongwook@openai.com>
-```**Diff:**
+```
+
+**Diff:**
 ```diff
 diff --git a/whisper.ts b/whisper.ts
 --- a/whisper.ts
@@ -225,8 +231,6 @@ diff --git a/whisper.ts b/whisper.ts
 ---
 
 ## 2023-03-13T23:34:09Z -- Fix alignment between the segments and the list of words (#1087) (`671ac5a4`)
-
-
 
 **Reason:** Immediately followed by fix commit ba88b8e1 ("fix github language stats getting dominated by jupyter notebook (#1076)") touching overlapping files (`whisper.ts`).
 **Fixed by:** `ba88b8e1` (see `CORRECT.md` for recovery commit)
@@ -257,14 +261,14 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-13T09:34:16Z -- Use tiktoken (#1044) (`839639a2`)
 
-**Reason:** Immediately followed by fix commit 671ac5a4 ("Fix alignment between the segments and the list of words (#1087)") touching overlapping files (whisper.ts)
-**Fixed by:** `671ac5a4` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit 671ac5a4 ("Fix alignment between the segments and the list of words (#1087)") touching overlapping files (`whisper.ts`).
+**Fixed by:** `671ac5a4` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 Use tiktoken (#1044)
 * use tiktoken==0.3.0
 
@@ -304,9 +308,16 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-08T04:43:49Z -- fix typo (`aac47c98`)
 
-
 **Reason:** Immediately followed by fix commit 38f2f4d9 ("fix all_tokens handling that caused more repetitions and discrepancy in JSON (#1060)") touching overlapping files (`whisper.ts`).
-**Fixed by:** `38f2f4
+**Fixed by:** `38f2f4d9` (see `CORRECT.md` for recovery commit)
+
+**Files touched:**
+- `whisper.ts`
+
+**Commit message:**
+```text
+fix typo
+```
 
 **Diff:**
 ```diff
@@ -323,16 +334,15 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-08T04:36:29Z -- Release 20230307 (`26807ec6`)
 
-**Reason:** Immediately followed by fix commit aac47c98 ("fix typo") touching overlapping files (whisper.ts)
-**Fixed by:** `aac47c98` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit aac47c98 ("fix typo") touching overlapping files (`whisper.ts`).
+**Fixed by:** `aac47c98` (see `CORRECT.md` for recovery commit)
 
 **Files touched:**
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 Release 20230307
-
 ```
 
 **Diff:**
@@ -356,7 +366,7 @@ diff --git a/whisper.ts b/whisper.ts
 - `whisper.ts`
 
 **Commit message:**
-```
+```text
 attempt to fix the repetition/hallucination issue identified in #1046 (#1052)
 * attempt to fix the repetition/hallucination issue identified in #1046
 
@@ -382,8 +392,7 @@ diff --git a/whisper.ts b/whisper.ts
 
 ## 2023-03-08T00:56:31Z -- Use triton==2.0.0 (#1053) (`38e990d8`)
 
-**Reason:** Immediately followed by fix commit 919a7134 ("attempt to fix the repetition/hallucination issue identified in #1046 (#1052)") touching overlapping files (whisper.ts)
-**Fixed by:** `919a7134` (see CORRECT.md for recovery commit)
+**Reason:** Immediately followed by fix commit 919a713
 
 **Files touched:**
 - `whisper.ts`
