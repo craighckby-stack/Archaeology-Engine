@@ -174,3 +174,47 @@ The Commit Archaeology Engine (CAE) has completed its analysis of the provided r
 *   **Configuration Decoupling:** The introduction of `config_v3.1.json` indicates a strategic decision to separate system parameters from the core logic of the inference kernel. This suggests a prior realization that hardcoding values—or relying on manual flag passing—was non-viable for sustained development.
 *   **Standardization Debt:** The repository initially suffered from high churn in formatting and metadata (README, CITATION.cff, issue templates). The shift to consistent tool-managed configurations (e.g., stale issue management, syntax highlighting, and TOC automation) suggests that the maintainers prioritized reducing manual overhead in project governance as the repository matured.
 *   **Integration Stability Risks:** The prevalence of merge-related "fix" commits indicates that the project’s continuous integration or branching strategy struggled with synchronization issues during the initial growth phase, likely due to external contributions that required immediate post-merge adjustment.
+
+---
+
+## Appended Analysis Stream (2026-09-13 12:21:55)
+
+## Deterministic patterns
+
+**Most-touched files (Architectural hotspots):**
+- `DeepSeek-V3.ts` — 48 commits
+- `README.md` — 13 commits
+- `inference/model.py` — 7 commits
+- `inference/kernel.py` — 6 commits
+- `inference/configs/config_v3.1.json` — 1 commits
+
+**Files with iterative wrong->correct cycles (Hard-won lessons):**
+- `DeepSeek-V3.ts` — 7 failed-and-fixed cycles
+
+**Recurring themes in commit subjects:**
+- `merge` — 15 commits
+- `pull` — 15 commits
+- `request` — 15 commits
+- `from` — 15 commits
+- `readme` — 8 commits
+- `main` — 8 commits
+
+--- 
+
+## LLM-surfaced patterns (Gemini)
+
+The Commit Archaeology Engine (CAE) has completed its analysis of the provided repository digest. The following observations represent the structural and procedural patterns identified in the codebase history.
+
+### **Architectural Hotspots and Recurring Failure Classes**
+*   **Documentation-Driven Development:** The primary locus of activity is `DeepSeek-V3.ts`, which acts as a centralized metadata or documentation aggregator for the project. Frequent, incremental commits to this file suggest an ongoing effort to maintain project status, citation, and configuration visibility.
+*   **High-Frequency Fix Cycles:** There is a persistent pattern of "immediate-follow-up" commits, where a primary change (often a merge or documentation update) is immediately succeeded by a corrective commit touching the same file. 7 instances of these cycles were identified, indicating a lack of local pre-commit validation or insufficient environment parity before pushing to the repository.
+*   **Inference Kernel Volatility:** The `inference/kernel.py` and `inference/model.py` components, appearing in the August 2025 timeline, represent a shift toward active engine development. The recurring patches in these files indicate that the project is currently in a state of rapid functional expansion, specifically regarding model scalability and kernel implementation.
+
+### **Skill Growth and Evolution**
+*   **Transition from Documentation to Engine Logic:** Early history (December 2024–February 2025) is characterized by repository housekeeping, dependency management, and README maintenance. The project shifted focus in late August 2025 toward implementing concrete inference logic, marked by granular updates to `kernel.py` and `model.py` (e.g., `scale_fmt=ue8m0` support).
+*   **Increased Configuration Formalism:** The evolution from simple README updates to the integration of structured configuration files (`inference/configs/config_v3.1.json`) signals a transition toward production-grade software engineering, moving away from ad-hoc documentation toward parameterized system design.
+
+### **Key Architectural Decisions and Hard-Won Lessons**
+*   **Configuration Decoupling:** The introduction of `config_v3.1.json` indicates a strategic decision to separate system parameters from the core logic of the inference kernel. This suggests a prior realization that hardcoding values—or relying on manual flag passing—was non-viable for sustained development.
+*   **Standardization Debt:** The repository initially suffered from high churn in formatting and metadata (README, CITATION.cff, issue templates). The shift to consistent tool-managed configurations (e.g., stale issue management, syntax highlighting, and TOC automation) suggests that the maintainers prioritized reducing manual overhead in project governance as the repository matured.
+*   **Integration Stability Risks:** The prevalence of merge-related "fix" commits indicates that the project’s continuous integration or branching strategy struggled with synchronization issues during the initial growth phase, likely due to external contributions that required immediate post-merge adjustment.
