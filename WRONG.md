@@ -10,6 +10,9 @@
 - `server.ts`
 
 **Commit message:**
+    # inline check
+    if not req.headers.get("Authorization"):
+        raise Exception("Unauthorized")
 ```
 attempt: try express middleware chain
 Trying global app.use without path filtering.
