@@ -26,18 +26,17 @@
 
 ## LLM-surfaced patterns (Gemini)
 
-The Commit Archaeology Engine (CAE) has completed its analysis of the provided git digest. The following observations detail the technical evolution and recurring patterns identified in the repository history.
+The Commit Archaeology Engine (CAE) has completed its analysis of the provided git digest. The following observations outline the development trajectory and structural patterns identified within the repository history.
 
-### 1. Architectural Hotspots and Failure Classes
-*   **Middleware Ordering and Encapsulation:** The primary technical friction point involves the placement and structure of middleware. The history reveals two distinct failure cycles (commits `234ab33d` and `34b1ec41`) centered on the implementation of cross-cutting concerns (JWT validation and middleware chains).
-*   **Failure Pattern - "Trial-and-Error Implementation":** The repository exhibits a recurring pattern of attempting direct, inline implementation (`wip: trying inline jwt validation`) followed by a corrective refactor to externalize logic into middleware (`fix: extract jwt validation into middleware`). This suggests the codebase initially matures through iterative decoupling.
-*   **Dependency on External Sequencing:** The reliance on specific middleware registration order in `server.ts` acts as a recurring failure point, requiring explicit reordering to achieve functional correctness.
+*   **Architectural Hotspots and Failure Classes**
+    *   **Middleware Ordering/Configuration:** The `server.ts` file experienced a failure (234ab33d) and a subsequent corrective commit (5e4e56be) directly related to the sequencing of the middleware chain. This indicates a dependency on execution order that was not resolved by the initial implementation attempt.
+    *   **Authentication Logic:** The `app.py` module served as a focal point for iterative refinement, specifically regarding JWT validation. The transition from inline logic (34b1ec41) to extracted middleware (7689035e) marks a failure-to-correction cycle focused on architectural cleanliness and separation of concerns.
 
-### 2. Skill Growth and Evolution
-*   **Increased Abstraction Capability:** The transition from `app.py` (early phase) to `server.ts` (later phase) demonstrates a shift in implementation strategy. The developer transitioned from experimenting with inline logic to adopting standardized middleware patterns, indicating an increased comfort level with the underlying framework architecture.
-*   **Proactive Documentation Habits:** The sequence of commits demonstrates an evolution toward systemic awareness. The creation of `docs/AUTH.md` immediately following server configuration suggests a progression from purely implementation-focused work to maintaining technical context for complex subsystems.
+*   **Skill Growth and Evolution**
+    *   **Refactoring Capability:** The history demonstrates a pattern of "Test-then-Refactor." The author identifies a functional implementation (e.g., inline validation), recognizes it as suboptimal, and successfully extracts the logic into more maintainable structures (middleware). 
+    *   **Documentation Maturity:** The transition from early structural coding (08:30) to the addition of `docs/AUTH.md` (11:30) suggests an evolution in development process, moving from code-first implementation to maintaining architectural documentation as the system footprint increases.
 
-### 3. Architectural Decisions and Lessons
-*   **Decoupling Logic from Routing:** A clear trajectory exists from inline authentication logic (commit `42f941a8`) to modularized, middleware-based validation (commit `7689035e`). The "hard-won lesson" identified here is that inline logic in early-stage routing files (`app.py`) creates technical debt that necessitates immediate refactoring.
-*   **Externalized Configuration:** The final action in the digest (addition of a `config loader`) signals a decision to separate operational configuration from application logic. This indicates a shift away from hardcoded server parameters, likely in response to the preceding integration hurdles encountered during middleware configuration.
-*   **Environment Bifurcation:** The existence of both `app.py` and `server.ts` suggests a multi-language or multi-environment architecture, though the history implies a shared pattern of migrating from "attempted inline logic" to "structured middleware" across both environments.
+*   **Key Architectural Decisions and Lessons**
+    *   **Standardization of Authentication:** The repeated focus on JWT validation and authentication flows across both `app.py` and `server.ts` indicates a prioritization of security infrastructure as the foundation of the system.
+    *   **Dependency on Config:** The final commit (b3a4c5d6) introduces a `config.ts` loader. This indicates a progression toward externalizing hardcoded variables, likely learned as a response to the rigid structures observed in the preceding `server.ts` and `app.py` commits. 
+    *   **Failure Pattern Recognition:** The author consistently uses descriptive subject prefixes ("attempt:", "wip:", "fix:") to denote trial-and-error phases. This practice reveals a self-correcting development cycle where the author acknowledges architectural dead-ends before finalizing the implementation.
