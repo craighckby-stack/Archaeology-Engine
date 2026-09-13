@@ -29,19 +29,22 @@
 
 ### 1. Architectural Hotspots and Recurring Failure Classes
 
-* **Primary Codebase Hotspots**: `app.py` and `server.ts` are the core churn locations, accounting for 6 of the 8 commits. Both files directly host authentication and middleware setup logic.
-* **Middleware Integration Failures**: The primary failure class centers on middleware design and execution flow across both Python (`app.py`) and TypeScript (`server.ts`) stacks:
-  * In `app.py`, commit `34b1ec41` failed when attempting inline JWT validation, requiring a refactor to extract validation into a dedicated middleware component (`7689035e`).
-  * In `server.ts`, commit `234ab33d` failed during Express middleware chain assembly, requiring explicit middleware registration reordering (`5e4e56be`).
+*   **Primary Churn Hotspots (`app.py` and `server.ts`):** File modifications are concentrated in core application entry points—`app.py` (3 commits) and `server.ts` (3 commits)—indicating localized structural instability during request pipeline setup.
+*   **Middleware Abstraction Failures:** Initial implementations failed when placing request validation logic inline (`34b1ec41`), requiring a refactoring step to extract JWT validation into dedicated middleware (`7689035e`).
+*   **Middleware Execution Ordering Issues:** Integration of the Express middleware chain in `server.ts` (`234ab33d`) failed due to registration sequence, requiring an explicit reordering fix (`5e4e56be`) to resolve execution flow.
 
-### 2. Skill Growth and Evolution Across Time
+---
 
-* **Shift from Monolithic to Decoupled Design Patterns**: The progression in `app.py` (08:30–09:10) demonstrates an immediate shift from embedding inline validation logic (`34b1ec41`) to enforcing architectural separation of concerns via standalone middleware (`7689035e`).
-* **Cross-Language Stack Expansion**: Development transitions from Python application logic (`app.py` at 08:30–09:10) to TypeScript/Node.js server scaffolding (`server.ts` at 10:00–11:00).
-* **Evolution Toward Stabilization and System Boundaries**: After resolving execution order bugs in `server.ts` (`5e4e56be`), commits shift from trial-and-error implementations toward system hardening, including architecture documentation (`docs/AUTH.md` at 11:30) and isolated configuration management (`config.ts` at 12:00).
+### 2. Skill Growth and Process Evolution
+
+*   **Transition from Inline Logic to Modular Patterns:** The commit history demonstrates an immediate correction cycle: attempting inline processing in `app.py` (`34b1ec41`) is succeeded by extracting logic into reusable middleware (`7689035e`).
+*   **Evolution from Prototyping to System Stabilization:** Early commits prioritize trial-and-error implementations marked as `wip` and `attempt`. Later commits demonstrate procedural maturity by documenting the validated flow (`docs/AUTH.md`) and decoupling configuration (`config.ts`).
+*   **Multi-Language Stack Expansion:** The timeline shows a progression from Python-based authentication prototyping (`app.py`) to TypeScript server scaffolding (`server.ts`) and modular configuration handling (`config.ts`).
+
+---
 
 ### 3. Key Architectural Decisions and Hard-Won Lessons
 
-* **Extraction of Validation Logic**: Decoupling JWT validation from route handlers into dedicated middleware (`7689035e`) established modular authentication boundaries in `app.py`.
-* **Sensitivity of Middleware Ordering**: The failure in `234ab33d` highlighted that Express middleware execution depends strictly on registration sequence, leading to the corrective reordering in `5e4e56be`.
-* **Immediate System Capture and Modularization**: Following the resolution of authentication and middleware setup across both stacks, the design was codified through formal flow documentation (`docs/AUTH.md`) and centralized configuration loading (`config.ts`).
+*   **Decoupled Authentication Architecture:** Inline JWT validation was abandoned in favor of dedicated auth middleware (`7689035e`), establishing a policy of keeping route handlers clean of token validation logic.
+*   **Sequential Rigor in Middleware Chains:** Express request processing relies strictly on registration order (`5e4e56be`), establishing that middleware dependency resolution must be explicitly sequenced during server setup.
+*   **Externalization of Operations and Config:** Following authentication stabilization, operational parameters were separated into dedicated files (`docs/AUTH.md` for architecture reference and `config.ts` for application settings).
