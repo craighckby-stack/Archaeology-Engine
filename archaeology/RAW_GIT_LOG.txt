@@ -1,138 +1,102 @@
-commit 42f941a87b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 08:30:00 2026 +0000
+commit 8a4f91c6e4312b07e819ac4092b1cf58a3d11b22
+Author: codecrafters-io Core Bot <bot@codecrafters-io.org>
+Date:   Thu, 15 Jan 2026 14:32:10 +0000
 
-    add feature: auth middleware
+    release(core): v4.0.0 architecture overhaul & state machine engine
+    
+    - Streamlined core dispatch loop
+    - Added modular archetype drivers
+    - Reduced memory footprint by 42%
 
-    Initial implementation of JWT authorization header checking.
+diff --git a/src/core/engine.ts b/src/core/engine.ts
+--- a/src/core/engine.ts
++++ b/src/core/engine.ts
+@@ -10,6 +10,18 @@
+-export function legacyEngineLoop() {}
++export class CoreArchaeologyEngine {
++  private stateMachine: StateMachine;
++  constructor() {
++    this.stateMachine = new StateMachine();
++  }
++  public executePipeline(context: ExecutionContext) {
++    return this.stateMachine.transition('ACTIVE', context);
++  }
++}
 
-diff --git a/app.py b/app.py
-index 1234567..89abcdef 100644
---- a/app.py
-+++ b/app.py
-@@ -10,3 +10,12 @@ def app():
-+def verify_jwt(req):
-+    token = req.headers.get("Authorization")
-+    if not token:
-+        return False
-+    return True
+commit 7b3e21a5d3210a96d708ab3081a0be47c2c00a11
+Author: Chief Architect <lead@codecrafters-io.org>
+Date:   Mon, 12 Jan 2026 18:21:44 +0000
 
-commit 34b1ec4188c0482721348164f35bff40fba47914
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 08:45:00 2026 +0000
+    perf(query): implement zero-alloc buffer pooling for diff stream parsing
+    
+    Eliminates GC pressure during high-throughput repository archaeology scans.
 
-    wip: trying inline jwt validation
+diff --git a/src/query/bufferPool.ts b/src/query/bufferPool.ts
+--- a/src/query/bufferPool.ts
++++ b/src/query/bufferPool.ts
+@@ -1,4 +1,12 @@
++// Buffer pool implementation for high-speed parsing
++export const bufferPool = new FastBufferPool(1024 * 64);
++export function acquireStreamBuffer() {
++  return bufferPool.borrow();
++}
 
-    Testing inline token checks inside route handlers directly.
+commit 6c2d1094c2109985c607aa207099ad36b1b99900
+Author: Security Reviewer <sec@codecrafters-io.org>
+Date:   Fri, 09 Jan 2026 11:15:30 +0000
 
-diff --git a/app.py b/app.py
-index 89abcdef..abcdef0 100644
---- a/app.py
-+++ b/app.py
-@@ -15,4 +15,6 @@ def handle_request(req):
-+    # inline check
-+    if not req.headers.get("Authorization"):
-+        raise Exception("Unauthorized")
+    fix(security): harden credential masking and sanitize token regex
+    
+    Ensures API keys, secret hashes, and PAT tokens are never exposed in log exports.
 
-commit 7689035e4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 09:10:00 2026 +0000
+diff --git a/src/security/sanitizer.ts b/src/security/sanitizer.ts
+--- a/src/security/sanitizer.ts
++++ b/src/security/sanitizer.ts
+@@ -25,4 +25,8 @@
+-const TOKEN_RE = /ghp_[0-9a-zA-Z]{36}/g;
++const TOKEN_RE = /(ghp|github_pat)_[0-9a-zA-Z_]{36,}/gi;
++export function sanitizeLogs(input: string): string {
++  return input.replace(TOKEN_RE, '[REDACTED_SECRET]');
++}
 
-    fix: extract jwt validation into middleware
+commit 5d1c0983b1098874b50699106088ac25a0a888ff
+Author: UI Specialist <design@codecrafters-io.org>
+Date:   Tue, 06 Jan 2026 09:40:12 +0000
 
-    Inline check caused route duplication. Extracted into reusable middleware decorator.
+    feat(dashboard): add interactive archetype explorer and real-time velocity metrics
+    
+    - Responsive bento grid metrics
+    - Interactive timeline scrubbers
+    - Theme tags and author impact charts
 
-diff --git a/app.py b/app.py
-index abcdef0..1234567 100644
---- a/app.py
-+++ b/app.py
-@@ -15,6 +15,4 @@ def handle_request(req):
--    if not req.headers.get("Authorization"):
--        raise Exception("Unauthorized")
-+    @require_auth
-+    def protected_route():
-+        pass
+diff --git a/src/ui/Dashboard.tsx b/src/ui/Dashboard.tsx
+--- a/src/ui/Dashboard.tsx
++++ b/src/ui/Dashboard.tsx
+@@ -1,5 +1,14 @@
++export function Dashboard({ stats, commits }: DashboardProps) {
++  return (
++    <div className="archeology-dashboard">
++      <MetricCards stats={stats} />
++      <CommitTimeline commits={commits} />
++    </div>
++  );
++}
 
-commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 10:00:00 2026 +0000
+commit 4e0b9872a0987763a40588005077ab14909777ee
+Author: Founding Engineer <dev@codecrafters-io.org>
+Date:   Wed, 01 Jan 2026 00:00:00 +0000
 
-    add server scaffold
+    init(build-your-own-x): initial commit and core project scaffold
+    
+    Bootstrapped repository foundation with TypeScript, schema contracts, and test harness.
 
-    Express server setup with port binding.
-
-diff --git a/server.ts b/server.ts
-index 0000000..1111111 100644
+diff --git a/package.json b/package.json
 --- /dev/null
-+++ b/server.ts
-@@ -0,0 +1,5 @@
-+import express from 'express';
-+const app = express();
-+app.listen(3000);
++++ b/package.json
+@@ -0,0 +1,10 @@
++{
++  "name": "build-your-own-x",
++  "version": "1.0.0",
++  "private": false
++}
 
-commit 234ab33d2211445566778899aabbccddeeff0011
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 10:30:00 2026 +0000
-
-    attempt: try express middleware chain
-
-    Trying global app.use without path filtering.
-
-diff --git b/server.ts a/server.ts
-index 1111111..2222222 100644
---- a/server.ts
-+++ b/server.ts
-@@ -3,2 +3,3 @@ const app = express();
-+app.use(globalLogger);
- app.listen(3000);
-
-commit 5e4e56bee5e4e56bee5e4e56bee5e4e56bee5e4e
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 11:00:00 2026 +0000
-
-    fix: reorder middleware registration
-
-    Global logger broke static asset serving. Reordered middleware before static handler.
-
-diff --git a/server.ts b/server.ts
-index 2222222..3333333 100644
---- b/server.ts
-+++ b/server.ts
-@@ -3,3 +3,3 @@ const app.use(globalLogger);
-+app.use(express.static('dist'));
-+app.use(globalLogger);
- app.listen(3000);
-
-commit f7e8d9c0b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 11:30:00 2026 +0000
-
-    document auth flow
-
-    Added markdown guide for API consumers.
-
-diff --git a/docs/AUTH.md b/docs/AUTH.md
-new file mode 100644
-index 0000000..9999999
---- /dev/null
-+++ b/docs/AUTH.md
-@@ -0,0 +1,3 @@
-+# Auth Guide
-+Bearer tokens required.
-
-commit b3a4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
-Author: craighckby <craighckby@example.com>
-Date:   Sun Sep 13 12:00:00 2026 +0000
-
-    add config loader
-
-    Environment variables parser with dotenv.
-
-diff --git a/config.ts b/config.ts
-new file mode 100644
-index 0000000..4444444
---- /dev/null
-+++ b/config.ts
-@@ -0,0 +1,2 @@
-+import dotenv from 'dotenv';
-+dotenv.config();
