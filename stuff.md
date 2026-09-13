@@ -308,3 +308,49 @@ As the Commit Archaeology Engine (CAE), I have analyzed the provided repository 
 *   **Constraint of Global State:** Early architectural decisions relied on global name scopes and implicit variable collections. The long-term effort to deprecate `snt.src.*` and transition to explicit variable creation (`snt.build`) highlights the difficulty of retrofitting clear variable ownership into a system originally built on implicit graph construction.
 *   **Strategy-Specific Specialization:** The library underwent repeated iterations to support distributed strategies (TPU, MirroredStrategy). The necessity of "reverting to legacy variables" or "swapping SyncOnRead for Mirrored" suggests that framework-level distribution primitives were often unstable, requiring the library to handle platform-specific device logic internally.
 *   **Strict vs. Permissive APIs:** Repeated cycles of "Raise an error if X" followed by "Fixing breakage caused by X" reveal the friction inherent in moving a research library toward a production-grade API. Hardening the interface required significant "gardening" of usage patterns that were previously assumed to be safe.
+
+---
+
+## Appended Analysis Stream (2026-09-13 12:30:54)
+
+## Deterministic patterns
+
+**Most-touched files (Architectural hotspots):**
+- `sonnet.ts` — 852 commits
+- `sonnet/__init__.py` — 6 commits
+- `examples/BUILD` — 5 commits
+- `sonnet/src/conformance/checkpoints/BUILD` — 5 commits
+- `sonnet/src/recurrent.py` — 4 commits
+
+**Files with iterative wrong->correct cycles (Hard-won lessons):**
+- `sonnet.ts` — 96 failed-and-fixed cycles
+
+**Recurring themes in commit subjects:**
+- `sonnet` — 125 commits
+- `test` — 69 commits
+- `version` — 62 commits
+- `change` — 61 commits
+- `from` — 59 commits
+- `remove` — 53 commits
+
+--- 
+
+## LLM-surfaced patterns (Gemini)
+
+As the Commit Archaeology Engine (CAE), I have analyzed the provided repository history. The data reflects the evolution of a deep learning library (Sonnet) transitioning through multiple framework versions, infrastructure migrations, and API hardening.
+
+### 1. Architectural Hotspots and Recurring Failure Classes
+*   **Documentation and Metadata Drift:** A high frequency of "WRONG" commits are immediately followed by trivial fixes (typos, indentation, broken code blocks in docstrings). This indicates a lack of automated linting or static analysis for documentation at the time of commit.
+*   **API/Contract Incompatibility:** Multiple failures stem from breaking changes in `tf.contrib` or `tf.nest`, necessitated by broader TensorFlow updates. The library frequently required "workaround" commits to maintain compatibility with shifting underlying framework internals.
+*   **Test Environment Instability:** Several commits identify specific test failures related to GPU availability, XLA compilation, or floating-point tolerance ("Increased tolerance to fix test flakiness"). The recurrence suggests that the test suite was highly sensitive to non-deterministic execution environments (TPU/GPU).
+*   **Module Lifecycle Management:** The `AbstractModule` class and `__init__` / `__call__` patterns are recurring hotspots. Attempts to harden the API (e.g., forcing named arguments in `__init__`) frequently triggered immediate downstream build failures.
+
+### 2. Skill Growth and Evolution
+*   **Shift to Functional Paradigms:** The project shows a clear strategic pivot in 2021 (commit `9bb751ff`) toward a functional API inspired by JAX and Haiku, marking a departure from the object-oriented `AbstractModule` structure used in the early codebase.
+*   **Maturation of Dependency Management:** The evolution from manual vendoring (removing the `tensorflow` submodule, removing `six`) to standard requirement handling (`requirements-tf.txt`) reflects the project's progression from a research prototype to a standardized library.
+*   **Test Infrastructure Hardening:** Early commits show frequent manual adjustments to `test.sh` and build rules. Over time, these concerns are abstracted into CI/CD workflows (`.github/workflows/ci.yml`), demonstrating a maturation of engineering practices.
+
+### 3. Key Architectural Decisions and Hard-Won Lessons
+*   **Constraint of Global State:** Early architectural decisions relied on global name scopes and implicit variable collections. The long-term effort to deprecate `snt.src.*` and transition to explicit variable creation (`snt.build`) highlights the difficulty of retrofitting clear variable ownership into a system originally built on implicit graph construction.
+*   **Strategy-Specific Specialization:** The library underwent repeated iterations to support distributed strategies (TPU, MirroredStrategy). The necessity of "reverting to legacy variables" or "swapping SyncOnRead for Mirrored" suggests that framework-level distribution primitives were often unstable, requiring the library to handle platform-specific device logic internally.
+*   **Strict vs. Permissive APIs:** Repeated cycles of "Raise an error if X" followed by "Fixing breakage caused by X" reveal the friction inherent in moving a research library toward a production-grade API. Hardening the interface required significant "gardening" of usage patterns that were previously assumed to be safe.
