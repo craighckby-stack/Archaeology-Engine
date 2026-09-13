@@ -2,187 +2,6 @@
 
 > Full content and diffs of every commit that succeeded without failure or immediate reversion (newest commits first).
 
-## Sun Sep 13 12:00:00 2026 +0000 -- add config loader (`b3a4c5d6`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `config.ts`
-
-**Commit message:**
-```
-add config loader
-Environment variables parser with dotenv.
-```
-
-**Diff:**
-```diff
-diff --git a/config.ts b/config.ts
-new file mode 100644
-index 0000000..4444444
---- /dev/null
-+++ b/config.ts
-@@ -0,0 +1,2 @@
-+import dotenv from 'dotenv';
-+dotenv.config();
-
-```
-
----
-
-## Sun Sep 13 11:30:00 2026 +0000 -- document auth flow (`f7e8d9c0`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `docs/AUTH.md`
-
-**Commit message:**
-```
-document auth flow
-Added markdown guide for API consumers.
-```
-
-**Diff:**
-```diff
-diff --git a/docs/AUTH.md b/docs/AUTH.md
-new file mode 100644
-index 0000000..9999999
---- /dev/null
-+++ b/docs/AUTH.md
-@@ -0,0 +1,3 @@
-+# Auth Guide
-+Bearer tokens required.
-
-
-```
-
----
-
-## Sun Sep 13 11:00:00 2026 +0000 -- fix: reorder middleware registration (`5e4e56be`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `server.ts`
-
-**Commit message:**
-```
-fix: reorder middleware registration
-Global logger broke static asset serving. Reordered middleware before static handler.
-```
-
-**Diff:**
-```diff
-diff --git a/server.ts b/server.ts
-index 2222222..3333333 100644
---- b/server.ts
-+++ b/server.ts
-@@ -3,3 +3,3 @@ const app.use(globalLogger);
-+app.use(express.static('dist'));
-+app.use(globalLogger);
- app.listen(3000);
-
-
-```
-
----
-
-## Sun Sep 13 10:00:00 2026 +0000 -- add server scaffold (`a1b2c3d4`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `server.ts`
-
-**Commit message:**
-```
-add server scaffold
-Express server setup with port binding.
-```
-
-**Diff:**
-```diff
-diff --git a/server.ts b/server.ts
-index 0000000..1111111 100644
---- /dev/null
-+++ b/server.ts
-@@ -0,0 +1,5 @@
-+import express from 'express';
-+const app = express();
-+app.listen(3000);
-
-
-```
-
----
-
-## Sun Sep 13 09:10:00 2026 +0000 -- fix: extract jwt validation into middleware (`7689035e`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `app.py`
-
-**Commit message:**
-```
-fix: extract jwt validation into middleware
-Inline check caused route duplication. Extracted into reusable middleware decorator.
-```
-
-**Diff:**
-```diff
-diff --git a/app.py b/app.py
-index abcdef0..1234567 100644
---- a/app.py
-+++ b/app.py
-@@ -15,6 +15,4 @@ def handle_request(req):
--    if not req.headers.get("Authorization"):
--        raise Exception("Unauthorized")
-+    @require_auth
-+    def protected_route():
-+        pass
-
-
-```
-
----
-
-## Sun Sep 13 08:30:00 2026 +0000 -- add feature: auth middleware (`42f941a8`)
-
-**Author:** craighckby <craighckby@example.com>
-
-**Files touched:**
-- `app.py`
-
-**Commit message:**
-```
-add feature: auth middleware
-Initial implementation of JWT authorization header checking.
-```
-
-**Diff:**
-```diff
-diff --git a/app.py b/app.py
-index 1234567..89abcdef 100644
---- a/app.py
-+++ b/app.py
-@@ -10,3 +10,12 @@ def app():
-+def verify_jwt(req):
-+    token = req.headers.get("Authorization")
-+    if not token:
-+        return False
-+    return True
-
-
-```
-
----
-
----
-
-<!-- CAE Append Session: 2026-09-13T12:16:59.588Z -->
-
 ## Wed, 27 Aug 2025 17:12:13 +0800 -- --- (`9b4e9788`)
 
 **Author:** Unknown
@@ -241,8 +60,6 @@ index 88684997..9ce81686 100644
 ```
 
 ---
-
-
 
 ## Wed, 27 Aug 2025 17:12:13 +0800 -- --- (`adecc0ef`)
 
@@ -303,8 +120,6 @@ index 88684997..9ce81686 100644
 
 ---
 
-
-
 ## Wed, 27 Aug 2025 16:23:30 +0800 -- Signed-off-by: youkaichao <youkaichao@gmail.com> (`82f6008c`)
 
 **Author:** Unknown
@@ -344,8 +159,6 @@ index e12ad48d..57832ad1 100644
 ```
 
 ---
-
-
 
 ## Wed, 27 Aug 2025 15:30:21 +0800 -- * support scale_fmt=ue8m0 (`b15f0dbb`)
 
@@ -548,8 +361,6 @@ index 7539a685..88684997 100644
 
 ---
 
-
-
 ## Tue, 26 Aug 2025 17:39:07 +0800 -- --- (`4592be48`)
 
 **Author:** Unknown
@@ -587,8 +398,6 @@ index c143e979..7539a685 100644
 ```
 
 ---
-
-
 
 ## Mon, 16 Jun 2025 14:34:28 +0800 -- --- (`f6e34dd2`)
 
@@ -628,8 +437,6 @@ index 7ac034cd..e94a77fd 100644
 
 ---
 
-
-
 ## Mon, 16 Jun 2025 14:34:28 +0800 -- --- (`e975062c`)
 
 **Author:** Unknown
@@ -667,8 +474,6 @@ index 7ac034cd..e94a77fd 100644
 ```
 
 ---
-
-
 
 ## Wed, 26 Mar 2025 08:58:35 -0400 -- --- (`88d6547d`)
 
@@ -708,8 +513,6 @@ index a67a28d2..fd120d21 100644
 
 ---
 
-
-
 ## Wed, 26 Mar 2025 08:58:35 -0400 -- --- (`a5d2ad22`)
 
 **Author:** Unknown
@@ -747,8 +550,6 @@ index a67a28d2..fd120d21 100644
 ```
 
 ---
-
-
 
 ## Sun, 16 Mar 2025 23:42:21 +0800 -- --- (`a878eada`)
 
@@ -29034,8 +28835,6 @@ v9|C^}{2}m%z#jsC2>c=Nhrs_20`GGY4IG`_-y>GwS(rKCKYbEY5QqO?@&Aj-
 
 ---
 
-
-
 ## Sun, 16 Mar 2025 23:41:52 +0800 -- --- (`98e67a71`)
 
 **Author:** Unknown
@@ -29073,8 +28872,6 @@ index b1fdbef5..a67a28d2 100644
 ```
 
 ---
-
-
 
 ## Mon, 3 Mar 2025 20:16:37 +0800 -- --- (`57d7bd45`)
 
@@ -29189,8 +28986,6 @@ index 920ca513..9e5f08b9 100644
 
 ---
 
-
-
 ## Mon, 3 Mar 2025 20:16:37 +0800 -- polish (`408e6e18`)
 
 **Author:** Unknown
@@ -29229,8 +29024,6 @@ index 920ca513..9e5f08b9 100644
 ```
 
 ---
-
-
 
 ## Mon, 3 Mar 2025 20:10:18 +0800 -- --- (`73f2954f`)
 
@@ -29278,8 +29071,6 @@ index b388ae96..920ca513 100644
 ```
 
 ---
-
-
 
 ## Mon, 3 Mar 2025 19:23:08 +0800 -- --- (`1ab09c87`)
 
@@ -29340,8 +29131,6 @@ index b1fdbef5..b388ae96 100644
 
 ---
 
-
-
 ## Wed, 26 Feb 2025 17:06:54 +0800 -- --- (`741b06eb`)
 
 **Author:** Unknown
@@ -29389,8 +29178,6 @@ index 8f1ab817..c143e979 100644
 
 ---
 
-
-
 ## Wed, 26 Feb 2025 17:06:54 +0800 -- --- (`d29a9676`)
 
 **Author:** Unknown
@@ -29437,8 +29224,6 @@ index 8f1ab817..c143e979 100644
 ```
 
 ---
-
-
 
 ## Mon, 24 Feb 2025 11:50:20 +0800 -- --- (`592fd5da`)
 
@@ -29688,8 +29473,6 @@ index c5fbc0ee..00000000
 
 ---
 
-
-
 ## Mon, 24 Feb 2025 11:25:44 +0800 -- --- (`c9353aba`)
 
 **Author:** Unknown
@@ -29727,8 +29510,6 @@ index 9ba23466..b1fdbef5 100644
 ```
 
 ---
-
-
 
 ## Sat, 15 Feb 2025 11:02:28 +0800 -- --- (`4cc6253d`)
 
@@ -29768,8 +29549,6 @@ index ae907ad2..ba18dca0 100644
 
 ---
 
-
-
 ## Sat, 15 Feb 2025 11:02:28 +0800 -- --- (`4a65fd92`)
 
 **Author:** Unknown
@@ -29807,8 +29586,6 @@ index ae907ad2..ba18dca0 100644
 ```
 
 ---
-
-
 
 ## Fri, 14 Feb 2025 20:26:45 +0800 -- --- (`1398800e`)
 
@@ -29849,8 +29626,6 @@ index 40bbf4d2..8f1ab817 100644
 ```
 
 ---
-
-
 
 ## Fri, 14 Feb 2025 12:12:16 +0800 -- --- (`f09f5fa3`)
 
@@ -30075,8 +29850,6 @@ index 67467818..9ba23466 100644
 
 ---
 
-
-
 ## Fri, 14 Feb 2025 12:12:16 +0800 -- --- (`f07bccc4`)
 
 **Author:** Unknown
@@ -30114,8 +29887,6 @@ index 67467818..9ba23466 100644
 ```
 
 ---
-
-
 
 ## Fri, 14 Feb 2025 12:02:10 +0800 -- --- (`0866cab5`)
 
@@ -30227,8 +29998,6 @@ index 632b6288..67467818 100644
 
 ---
 
-
-
 ## 2025-02-08T10:28:40Z -- chore: update README.md to improve layout and image attributes (`e15f67af`)
 
 **Author:** Konano <konano@users.noreply.github.com>
@@ -30254,8 +30023,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-02-08T08:10:06Z -- Merge pull request #611 from Konano/chore-stale (`2f7b80ee`)
 
@@ -30283,8 +30050,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-02-08T07:12:09Z -- chore: add stale issue management configuration (`76d8d395`)
 
 **Author:** Konano <konano@users.noreply.github.com>
@@ -30310,8 +30075,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-02-07T08:42:55Z -- fix comment (`5ee97a83`)
 
@@ -30339,8 +30102,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-02-05T08:50:03Z -- Merge pull request #440 from spenserblack/main (`09d10862`)
 
 **Author:** Xingkai Yu <xingkaiyu@users.noreply.github.com>
@@ -30366,8 +30127,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-02-05T08:33:18Z -- Merge pull request #528 from WSL0809/main (`d0f8c4fc`)
 
@@ -30395,8 +30154,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-02-05T08:23:02Z -- Merge pull request #556 from XxAlonexX/main (`87a01053`)
 
 **Author:** Xingkai Yu <xingkaiyu@users.noreply.github.com>
@@ -30422,8 +30179,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-02-05T04:03:02Z -- Merge pull request #408 from fitzjalen/refactor (`a157077c`)
 
@@ -30451,8 +30206,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-02-05T03:39:08Z -- Merge pull request #364 from Dhie-boop/feature/table-of-content (`c32c957f`)
 
 **Author:** Huang Panpan <huangpanpan@users.noreply.github.com>
@@ -30479,8 +30232,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-02-04T05:08:45Z -- Fix Linear Layer Bias Initialization (`6a30b432`)
 
 **Author:** XxAlonexX <xxalonexx@users.noreply.github.com>
@@ -30506,8 +30257,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-02-01T18:34:59Z -- Update README.md (`d5c08b38`)
 
@@ -30539,8 +30288,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-28T23:07:15Z -- Add syntax highlighting to requirements code block (`760d2282`)
 
 **Author:** Spenser Black <spenserblack@users.noreply.github.com>
@@ -30566,8 +30313,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-28T14:14:35Z -- Fix TOC links to correctly link to headings in Markdown (`6784e197`)
 
@@ -30595,8 +30340,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-27T11:18:17Z -- Add table of contents to README (`ddc501b8`)
 
 **Author:** Dhieu <dhieu@users.noreply.github.com>
@@ -30622,8 +30365,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-26T01:29:50Z -- Merge pull request #341 from enochkan/main (`b5d872ea`)
 
@@ -30651,8 +30392,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-25T22:29:54Z -- docs: Update system requirements with GitHub Markdown callout (`53d8dc99`)
 
 **Author:** enoch kan <enochkan@users.noreply.github.com>
@@ -30678,8 +30417,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-25T22:26:48Z -- docs: Improve system requirements section formatting (`722e6885`)
 
@@ -30707,8 +30444,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-25T22:21:51Z -- docs: Add system requirements for DeepSeek-Infer demo (`53b055bc`)
 
 **Author:** enoch kan <enochkan@users.noreply.github.com>
@@ -30734,8 +30469,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-07T09:53:28Z -- Merge pull request #234 from wangfuchun-fc/patch-1 (`ee4c4ea3`)
 
@@ -30763,8 +30496,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-07T06:02:11Z -- Merge pull request #193 from enochkan/main (`fdbd5be7`)
 
 **Author:** Huang Panpan <huangpanpan@users.noreply.github.com>
@@ -30790,8 +30521,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-06T14:00:32Z -- fix: fix readme doc typo. (`3779a897`)
 
@@ -30819,8 +30548,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-05T18:24:31Z -- Updated model.py docstrings (`bc77f22a`)
 
 **Author:** enoch kan <enochkan@users.noreply.github.com>
@@ -30846,8 +30573,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-05T18:18:18Z -- Enhance documentation and update .gitignore for model conversion scripts (`a1296f09`)
 
@@ -30875,8 +30600,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-05T06:33:48Z -- torch rmsnorm (`fd011c11`)
 
 **Author:** GeeeekExplorer <geeeekexplorer@users.noreply.github.com>
@@ -30902,8 +30625,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2025-01-03T07:30:48Z -- Update README.md (`9b288b86`)
 
@@ -30931,8 +30652,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2025-01-03T01:48:03Z -- Merge pull request #206 from kutt/patch-1 (`0d16ea24`)
 
 **Author:** Huang Panpan <huangpanpan@users.noreply.github.com>
@@ -30958,8 +30677,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-31T10:05:55Z -- require model-parallel in convert.py (`8710ec2e`)
 
@@ -30987,8 +30704,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-31T06:49:05Z -- Update issue templates (`7c2466b3`)
 
 **Author:** Huang Panpan <huangpanpan@users.noreply.github.com>
@@ -31014,8 +30729,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-30T07:03:30Z -- Merge pull request #21 from eltociear/patch-1 (`1b8e18cc`)
 
@@ -31043,8 +30756,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-30T06:25:28Z -- upd (`68d00619`)
 
 **Author:** zhyncs <zhyncs@users.noreply.github.com>
@@ -31070,8 +30781,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-30T06:21:00Z -- upd (`2fc98d1c`)
 
@@ -31099,8 +30808,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-30T06:18:00Z -- upd (`a1edf413`)
 
 **Author:** zhyncs <zhyncs@users.noreply.github.com>
@@ -31126,8 +30833,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-30T06:13:27Z -- docs: update SGLang usage (`8638950e`)
 
@@ -31155,8 +30860,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-30T03:04:14Z -- Update README.md (`83dd18ed`)
 
 **Author:** DeepSeekDDM <deepseekddm@users.noreply.github.com>
@@ -31183,8 +30886,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-28T15:43:11Z -- docs: update README.md (`710c8b8b`)
 
 **Author:** Ikko Eltociear Ashimine <ikkoeltociearashimine@users.noreply.github.com>
@@ -31210,8 +30911,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-27T01:34:38Z -- handle missing scale_inv_name (#2) (`8f1c9488`)
 
@@ -31247,8 +30946,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-27T01:16:09Z -- Merge pull request #9 from simon-mo/vllm (`c8087bd8`)
 
 **Author:** Huang Panpan <huangpanpan@users.noreply.github.com>
@@ -31274,8 +30971,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-27T01:11:31Z -- add version (`e2c15caf`)
 
@@ -31303,8 +30998,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-27T01:10:33Z -- Docs: add vLLM as supported engine (`cf47874d`)
 
 **Author:** simon-mo <simonmo@users.noreply.github.com>
@@ -31330,8 +31023,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
-
-
 
 ## 2024-12-26T11:01:57Z -- Release DeepSeek-V3 (`4c2fdb8f`)
 
@@ -31359,8 +31050,6 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 
 ---
 
-
-
 ## 2024-12-26T09:52:41Z -- Initial commit (`4b58dc6b`)
 
 **Author:** stack-heap-overflow <stackheapoverflow@users.noreply.github.com>
@@ -31386,3 +31075,4 @@ diff --git a/DeepSeek-V3.ts b/DeepSeek-V3.ts
 ```
 
 ---
+
