@@ -36,7 +36,7 @@ index 89abcdef..abcdef0 100644
 **Reason:** Self-identified failure / WIP in commit subject ("attempt: try express middleware chain")
 
 **Files touched:**
-- `server.ts a/server.ts`
+- `server.ts`
 
 **Commit message:**
 ```
