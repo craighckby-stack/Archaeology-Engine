@@ -1,149 +1,104 @@
 # Complete Commit Ledger
 
-Total Commits Analyzed: 8
+Total Commits Analyzed: 5
 
-### [OK] b3a4c5d6 - add config loader
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 12:00:00 2026 +0000
+### [OK] 8a4f91c6 - release(core): v4.0.0 architecture overhaul & state machine engine
+**Author:** codecrafters-io Core Bot <bot@codecrafters-io.org> | **Date:** Thu, 15 Jan 2026 14:32:10 +0000
 
 ```diff
-diff --git a/config.ts b/config.ts
-new file mode 100644
-index 0000000..4444444
+diff --git a/src/core/engine.ts b/src/core/engine.ts
+--- a/src/core/engine.ts
++++ b/src/core/engine.ts
+@@ -10,6 +10,18 @@
+-export function legacyEngineLoop() {}
++export class CoreArchaeologyEngine {
++  private stateMachine: StateMachine;
++  constructor() {
++    this.stateMachine = new StateMachine();
++  }
++  public executePipeline(context: ExecutionContext) {
++    return this.stateMachine.transition('ACTIVE', context);
++  }
++}
+
+
+```
+
+---
+
+### [OK] 7b3e21a5 - perf(query): implement zero-alloc buffer pooling for diff stream parsing
+**Author:** Chief Architect <lead@codecrafters-io.org> | **Date:** Mon, 12 Jan 2026 18:21:44 +0000
+
+```diff
+diff --git a/src/query/bufferPool.ts b/src/query/bufferPool.ts
+--- a/src/query/bufferPool.ts
++++ b/src/query/bufferPool.ts
+@@ -1,4 +1,12 @@
++// Buffer pool implementation for high-speed parsing
++export const bufferPool = new FastBufferPool(1024 * 64);
++export function acquireStreamBuffer() {
++  return bufferPool.borrow();
++}
+
+
+```
+
+---
+
+### [OK] 6c2d1094 - fix(security): harden credential masking and sanitize token regex
+**Author:** Security Reviewer <sec@codecrafters-io.org> | **Date:** Fri, 09 Jan 2026 11:15:30 +0000
+
+```diff
+diff --git a/src/security/sanitizer.ts b/src/security/sanitizer.ts
+--- a/src/security/sanitizer.ts
++++ b/src/security/sanitizer.ts
+@@ -25,4 +25,8 @@
+-const TOKEN_RE = /ghp_[0-9a-zA-Z]{36}/g;
++const TOKEN_RE = /(ghp|github_pat)_[0-9a-zA-Z_]{36,}/gi;
++export function sanitizeLogs(input: string): string {
++  return input.replace(TOKEN_RE, '[REDACTED_SECRET]');
++}
+
+
+```
+
+---
+
+### [OK] 5d1c0983 - feat(dashboard): add interactive archetype explorer and real-time velocity metrics
+**Author:** UI Specialist <design@codecrafters-io.org> | **Date:** Tue, 06 Jan 2026 09:40:12 +0000
+
+```diff
+diff --git a/src/ui/Dashboard.tsx b/src/ui/Dashboard.tsx
+--- a/src/ui/Dashboard.tsx
++++ b/src/ui/Dashboard.tsx
+@@ -1,5 +1,14 @@
++export function Dashboard({ stats, commits }: DashboardProps) {
++  return (
++    <div className="archeology-dashboard">
++      <MetricCards stats={stats} />
++      <CommitTimeline commits={commits} />
++    </div>
++  );
++}
+
+
+```
+
+---
+
+### [OK] 4e0b9872 - init(build-your-own-x): initial commit and core project scaffold
+**Author:** Founding Engineer <dev@codecrafters-io.org> | **Date:** Wed, 01 Jan 2026 00:00:00 +0000
+
+```diff
+diff --git a/package.json b/package.json
 --- /dev/null
-+++ b/config.ts
-@@ -0,0 +1,2 @@
-+import dotenv from 'dotenv';
-+dotenv.config();
-
-```
-
----
-
-### [OK] f7e8d9c0 - document auth flow
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 11:30:00 2026 +0000
-
-```diff
-diff --git a/docs/AUTH.md b/docs/AUTH.md
-new file mode 100644
-index 0000000..9999999
---- /dev/null
-+++ b/docs/AUTH.md
-@@ -0,0 +1,3 @@
-+# Auth Guide
-+Bearer tokens required.
-
-
-```
-
----
-
-### [OK] 5e4e56be - fix: reorder middleware registration
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 11:00:00 2026 +0000
-
-```diff
-diff --git a/server.ts b/server.ts
-index 2222222..3333333 100644
---- b/server.ts
-+++ b/server.ts
-@@ -3,3 +3,3 @@ const app.use(globalLogger);
-+app.use(express.static('dist'));
-+app.use(globalLogger);
- app.listen(3000);
-
-
-```
-
----
-
-### [WRONG] 234ab33d - attempt: try express middleware chain
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 10:30:00 2026 +0000
-**Note:** Self-identified failure / WIP in commit subject ("attempt: try express middleware chain")
-
-```diff
-diff --git b/server.ts a/server.ts
-index 1111111..2222222 100644
---- a/server.ts
-+++ b/server.ts
-@@ -3,2 +3,3 @@ const app = express();
-+app.use(globalLogger);
- app.listen(3000);
-
-
-```
-
----
-
-### [OK] a1b2c3d4 - add server scaffold
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 10:00:00 2026 +0000
-
-```diff
-diff --git a/server.ts b/server.ts
-index 0000000..1111111 100644
---- /dev/null
-+++ b/server.ts
-@@ -0,0 +1,5 @@
-+import express from 'express';
-+const app = express();
-+app.listen(3000);
-
-
-```
-
----
-
-### [OK] 7689035e - fix: extract jwt validation into middleware
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 09:10:00 2026 +0000
-
-```diff
-diff --git a/app.py b/app.py
-index abcdef0..1234567 100644
---- a/app.py
-+++ b/app.py
-@@ -15,6 +15,4 @@ def handle_request(req):
--    if not req.headers.get("Authorization"):
--        raise Exception("Unauthorized")
-+    @require_auth
-+    def protected_route():
-+        pass
-
-
-```
-
----
-
-### [WRONG] 34b1ec41 - wip: trying inline jwt validation
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 08:45:00 2026 +0000
-**Note:** Self-identified failure / WIP in commit subject ("wip: trying inline jwt validation")
-
-```diff
-diff --git a/app.py b/app.py
-index 89abcdef..abcdef0 100644
---- a/app.py
-+++ b/app.py
-@@ -15,4 +15,6 @@ def handle_request(req):
-+    # inline check
-+    if not req.headers.get("Authorization"):
-+        raise Exception("Unauthorized")
-
-
-```
-
----
-
-### [OK] 42f941a8 - add feature: auth middleware
-**Author:** craighckby <craighckby@example.com> | **Date:** Sun Sep 13 08:30:00 2026 +0000
-
-```diff
-diff --git a/app.py b/app.py
-index 1234567..89abcdef 100644
---- a/app.py
-+++ b/app.py
-@@ -10,3 +10,12 @@ def app():
-+def verify_jwt(req):
-+    token = req.headers.get("Authorization")
-+    if not token:
-+        return False
-+    return True
++++ b/package.json
+@@ -0,0 +1,10 @@
++{
++  "name": "build-your-own-x",
++  "version": "1.0.0",
++  "private": false
++}
 
 
 ```
