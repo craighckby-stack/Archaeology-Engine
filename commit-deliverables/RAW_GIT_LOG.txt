@@ -1,0 +1,138 @@
+commit 42f941a87b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 08:30:00 2026 +0000
+
+    add feature: auth middleware
+
+    Initial implementation of JWT authorization header checking.
+
+diff --git a/app.py b/app.py
+index 1234567..89abcdef 100644
+--- a/app.py
++++ b/app.py
+@@ -10,3 +10,12 @@ def app():
++def verify_jwt(req):
++    token = req.headers.get("Authorization")
++    if not token:
++        return False
++    return True
+
+commit 34b1ec4188c0482721348164f35bff40fba47914
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 08:45:00 2026 +0000
+
+    wip: trying inline jwt validation
+
+    Testing inline token checks inside route handlers directly.
+
+diff --git a/app.py b/app.py
+index 89abcdef..abcdef0 100644
+--- a/app.py
++++ b/app.py
+@@ -15,4 +15,6 @@ def handle_request(req):
++    # inline check
++    if not req.headers.get("Authorization"):
++        raise Exception("Unauthorized")
+
+commit 7689035e4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 09:10:00 2026 +0000
+
+    fix: extract jwt validation into middleware
+
+    Inline check caused route duplication. Extracted into reusable middleware decorator.
+
+diff --git a/app.py b/app.py
+index abcdef0..1234567 100644
+--- a/app.py
++++ b/app.py
+@@ -15,6 +15,4 @@ def handle_request(req):
+-    if not req.headers.get("Authorization"):
+-        raise Exception("Unauthorized")
++    @require_auth
++    def protected_route():
++        pass
+
+commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 10:00:00 2026 +0000
+
+    add server scaffold
+
+    Express server setup with port binding.
+
+diff --git a/server.ts b/server.ts
+index 0000000..1111111 100644
+--- /dev/null
++++ b/server.ts
+@@ -0,0 +1,5 @@
++import express from 'express';
++const app = express();
++app.listen(3000);
+
+commit 234ab33d2211445566778899aabbccddeeff0011
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 10:30:00 2026 +0000
+
+    attempt: try express middleware chain
+
+    Trying global app.use without path filtering.
+
+diff --git b/server.ts a/server.ts
+index 1111111..2222222 100644
+--- a/server.ts
++++ b/server.ts
+@@ -3,2 +3,3 @@ const app = express();
++app.use(globalLogger);
+ app.listen(3000);
+
+commit 5e4e56bee5e4e56bee5e4e56bee5e4e56bee5e4e
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 11:00:00 2026 +0000
+
+    fix: reorder middleware registration
+
+    Global logger broke static asset serving. Reordered middleware before static handler.
+
+diff --git a/server.ts b/server.ts
+index 2222222..3333333 100644
+--- b/server.ts
++++ b/server.ts
+@@ -3,3 +3,3 @@ const app.use(globalLogger);
++app.use(express.static('dist'));
++app.use(globalLogger);
+ app.listen(3000);
+
+commit f7e8d9c0b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 11:30:00 2026 +0000
+
+    document auth flow
+
+    Added markdown guide for API consumers.
+
+diff --git a/docs/AUTH.md b/docs/AUTH.md
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/docs/AUTH.md
+@@ -0,0 +1,3 @@
++# Auth Guide
++Bearer tokens required.
+
+commit b3a4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 12:00:00 2026 +0000
+
+    add config loader
+
+    Environment variables parser with dotenv.
+
+diff --git a/config.ts b/config.ts
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/config.ts
+@@ -0,0 +1,2 @@
++import dotenv from 'dotenv';
++dotenv.config();
