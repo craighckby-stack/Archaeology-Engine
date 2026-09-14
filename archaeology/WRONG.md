@@ -2876,3 +2876,1501 @@ diff --git a/heimdall.ts b/heimdall.ts
 +++ b/heimdall.ts
 @@ -0,0 +1,1 @@
 ```
+
+---
+
+<!-- CAE Append Session: 2026-09-14T06:47:47.207Z -->
+
+## 2026-09-14T06:37:31Z -- CAE: Create README.md (`5f8a47c0`)
+
+**Pair ID:** d95bbc02
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create README.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create README.md]
+```
+
+
+
+## 2026-09-14T06:03:26Z -- CAE: Append to README.md (`faf7f6d9`)
+
+**Pair ID:** dbb61b30
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to README.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to README.md]
+```
+
+
+
+## 2026-09-14T05:42:02Z -- Delete WRONG.md (`afa9aa02`)
+
+**Pair ID:** da96b73b
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Delete WRONG.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Delete WRONG.md]
+```
+
+
+
+## 2026-09-14T05:41:34Z -- Delete archaeology directory (`92ac2e73`)
+
+**Pair ID:** 00819e21
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Delete archaeology directory
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Delete archaeology directory]
+```
+
+
+
+## 2026-09-14T04:45:27Z -- CAE: Append to README.md (`0c2f0a20`)
+
+**Pair ID:** b51a5679
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to README.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to README.md]
+```
+
+
+
+## 2026-09-14T04:41:41Z -- Delete RAW_GIT_LOG.txt (`55dc45fc`)
+
+**Pair ID:** 2516a10d
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Delete RAW_GIT_LOG.txt
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Delete RAW_GIT_LOG.txt]
+```
+
+
+
+## 2026-09-13T12:56:47Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/CooldownBadge.tsx (`cfb9bb2c`)
+
+**Pair ID:** c379d08c
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/CooldownBadge.tsx
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/CooldownBadge.tsx]
+```
+
+
+
+## 2026-09-13T12:48:11Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts (`ca678bd4`)
+
+**Pair ID:** 15678f80
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts]
+```
+
+
+
+## 2026-09-13T12:47:50Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html (`fe2758c6`)
+
+**Pair ID:** ca678bd4
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html]
+```
+
+
+
+## 2026-09-13T12:40:38Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts (`2cd832c3`)
+
+**Pair ID:** 88313f86
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts]
+```
+
+
+
+## 2026-09-13T12:40:22Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html (`e96cbd32`)
+
+**Pair ID:** 2cd832c3
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html]
+```
+
+
+
+## 2026-09-13T12:32:03Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts (`36ae7e9d`)
+
+**Pair ID:** 8815f6b1
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/useCooldown.ts]
+```
+
+
+
+## 2026-09-13T12:30:56Z -- CAE: Append to README.md (`9a947b1d`)
+
+**Pair ID:** e1232969
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to README.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to README.md]
+```
+
+
+
+## 2026-09-13T12:29:12Z -- CAE: Append to README.md (`93f2c626`)
+
+**Pair ID:** 605f8b12
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to README.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to README.md]
+```
+
+
+
+## 2026-09-13T12:26:14Z -- CAE: Append to metadata.json (`d80c4f44`)
+
+**Pair ID:** e973a7b6
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to metadata.json]
+```
+
+
+
+## 2026-09-13T12:24:51Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html (`0823854d`)
+
+**Pair ID:** 4de67b1a
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for index.html]
+```
+
+
+
+## 2026-09-13T12:22:07Z -- CAE: Append to metadata.json (`e9fa1d26`)
+
+**Pair ID:** ca6f4366
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to metadata.json]
+```
+
+
+
+## 2026-09-13T12:20:38Z -- CAE: Append to metadata.json (`654255ee`)
+
+**Pair ID:** 1cb9f467
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to metadata.json]
+```
+
+
+
+## 2026-09-13T12:18:01Z -- CAE: Append to metadata.json (`e55d06b7`)
+
+**Pair ID:** bb6be77c
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to metadata.json]
+```
+
+
+
+## 2026-09-13T12:17:13Z -- CAE: Append to metadata.json (`5de97142`)
+
+**Pair ID:** f13f03c9
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to metadata.json]
+```
+
+
+
+## 2026-09-13T12:15:36Z -- CAE: Create metadata.json (`1c4c1b56`)
+
+**Pair ID:** 9dfd570e
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create metadata.json
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create metadata.json]
+```
+
+
+
+## 2026-09-13T12:14:20Z -- Delete archaeology directory (`98c2d17f`)
+
+**Pair ID:** 501085de
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Delete archaeology directory
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Delete archaeology directory]
+```
+
+
+
+## 2026-09-13T12:00:40Z -- EMG Core: Refactoring on archaeology/WRONG.md (`80434816`)
+
+**Pair ID:** c2a1794d
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+EMG Core: Refactoring on archaeology/WRONG.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[EMG Core: Refactoring on archaeology/WRONG.md]
+```
+
+
+
+## 2026-09-13T10:35:16Z -- feat: initialize Commit Archaeology Engine (`6777acb8`)
+
+**Pair ID:** 8ac3eec2
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+feat: initialize Commit Archaeology Engine
+
+Setup base project structure with React, Vite,
+Tailwind CSS, and the Gemini API client for
+git commit analysis.
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[feat: initialize Commit Archaeology Engine]
+```
+
+
+
+## 2026-09-12T12:52:29Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_prompts.sh (`9556321b`)
+
+**Pair ID:** 0b44f2f1
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_prompts.sh
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_prompts.sh]
+```
+
+
+
+## 2026-09-12T12:52:21Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_agents.sh (`bf711d9a`)
+
+**Pair ID:** 9556321b
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_agents.sh
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for update_agents.sh]
+```
+
+
+
+## 2026-09-12T12:46:29Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/validator.ts (`1218508c`)
+
+**Pair ID:** 35940df8
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/validator.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/validator.ts]
+```
+
+
+
+## 2026-09-12T12:44:42Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/msDosEngine.ts (`3b377570`)
+
+**Pair ID:** 1218508c
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/msDosEngine.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/msDosEngine.ts]
+```
+
+
+
+## 2026-09-12T12:40:58Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/api-client.ts (`74e25285`)
+
+**Pair ID:** b6b39cb3
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/api-client.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/lib/api-client.ts]
+```
+
+
+
+## 2026-09-12T12:38:18Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/use-toast.ts (`38b15662`)
+
+**Pair ID:** 54af81bd
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/use-toast.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/hooks/use-toast.ts]
+```
+
+
+
+## 2026-09-12T12:37:28Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/sidebar.tsx (`c9cdcbd1`)
+
+**Pair ID:** 38b15662
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/sidebar.tsx
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/sidebar.tsx]
+```
+
+
+
+## 2026-09-12T12:32:24Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/button.tsx (`87a0748d`)
+
+**Pair ID:** 4b6d2ef8
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/button.tsx
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/ui/button.tsx]
+```
+
+
+
+## 2026-09-12T12:25:53Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/FolderScanner.tsx (`9ef05eb9`)
+
+**Pair ID:** 2a703f13
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/FolderScanner.tsx
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/components/FolderScanner.tsx]
+```
+
+
+
+## 2026-09-12T12:22:09Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/github/create-repo/route.ts (`052732dc`)
+
+**Pair ID:** 8fc5695d
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/github/create-repo/route.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/github/create-repo/route.ts]
+```
+
+
+
+## 2026-09-12T12:19:00Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_synthesizer.sh (`52c9a549`)
+
+**Pair ID:** 052732dc
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_synthesizer.sh
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_synthesizer.sh]
+```
+
+
+
+## 2026-09-12T12:18:52Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_propose.js (`d1eaf883`)
+
+**Pair ID:** 52c9a549
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_propose.js
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_propose.js]
+```
+
+
+
+## 2026-09-12T12:12:07Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js (`dcb342c2`)
+
+**Pair ID:** af3dd626
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js]
+```
+
+
+
+## 2026-09-12T12:09:10Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for .next_dev/types/app/api/brain/route.ts (`520c9c6a`)
+
+**Pair ID:** 674c742b
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for .next_dev/types/app/api/brain/route.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for .next_dev/types/app/api/brain/route.ts]
+```
+
+
+
+## 2026-09-12T11:59:38Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js (`74a100ef`)
+
+**Pair ID:** fcdf8f33
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for compare.js]
+```
+
+
+
+## 2026-09-12T11:42:54Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/evolution/debate/route.ts (`10f36047`)
+
+**Pair ID:** 87e84289
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/evolution/debate/route.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/evolution/debate/route.ts]
+```
+
+
+
+## 2026-09-12T11:38:25Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/brain/route.ts (`821555fa`)
+
+**Pair ID:** d7f10634
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/brain/route.ts
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for src/app/api/brain/route.ts]
+```
+
+
+
+## 2026-09-12T11:02:46Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_orchestra.sh (`a98ea7b0`)
+
+**Pair ID:** c1ae3f92
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_orchestra.sh
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for fix_orchestra.sh]
+```
+
+
+
+## 2026-09-12T10:53:53Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for firestore.rules (`68c29356`)
+
+**Pair ID:** a3bf37f3
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for firestore.rules
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for firestore.rules]
+```
+
+
+
+## 2026-09-09T11:20:38Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for vite-diagnostic-plugin.ts (`c203d6bf`)
+
+**Pair ID:** c3bf5be9
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `AI-AGENT-OS.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for vite-diagnostic-plugin.ts
+```
+
+**Diff:**
+```diff
+diff --git a/AI-AGENT-OS.ts b/AI-AGENT-OS.ts
+--- a/AI-AGENT-OS.ts
++++ b/AI-AGENT-OS.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for vite-diagnostic-plugin.ts]
+```
+
+
+
+## 2026-09-09T11:19:42Z -- EMG Core [mutation-cycle]: Auto-logged failure post-mortem for tsconfig.json (`568b2b0a`)
+
+**Pair ID:** c203d6bf
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `AI-AGENT-OS.ts`
+
+**Commit message:**
+```
+EMG Core [mutation-cycle]: Auto-logged failure post-mortem for tsconfig.json
+```
+
+**Diff:**
+```diff
+diff --git a/AI-AGENT-OS.ts b/AI-AGENT-OS.ts
+--- a/AI-AGENT-OS.ts
++++ b/AI-AGENT-OS.ts
+@@ -0,0 +1,1 @@
++[EMG Core [mutation-cycle]: Auto-logged failure post-mortem for tsconfig.json]
+```
+
+
+
+## 2026-08-01T20:35:34Z -- [DARLEK CANN] Mutate src/components/DalekStatusIndicator.tsx (`10321182`)
+
+**Pair ID:** 7271cd96
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Darlek-caan-.ts`
+
+**Commit message:**
+```
+[DARLEK CANN] Mutate src/components/DalekStatusIndicator.tsx
+```
+
+**Diff:**
+```diff
+diff --git a/Darlek-caan-.ts b/Darlek-caan-.ts
+--- a/Darlek-caan-.ts
++++ b/Darlek-caan-.ts
+@@ -0,0 +1,1 @@
++[[DARLEK CANN] Mutate src/components/DalekStatusIndicator.tsx]
+```
+
+
+
+## 2026-08-01T20:12:45Z -- [DARLEK CANN] Mutate package.json (`6b1f825e`)
+
+**Pair ID:** d193e028
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Darlek-caan-.ts`
+
+**Commit message:**
+```
+[DARLEK CANN] Mutate package.json
+```
+
+**Diff:**
+```diff
+diff --git a/Darlek-caan-.ts b/Darlek-caan-.ts
+--- a/Darlek-caan-.ts
++++ b/Darlek-caan-.ts
+@@ -0,0 +1,1 @@
++[[DARLEK CANN] Mutate package.json]
+```
+
+
+
+## 2026-09-14T04:44:01Z -- [Pre-image] Prior state for 7057db47 (`7057db47-pre`)
+
+**Pair ID:** 7057db47
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 7057db47 (no prior introducing commit in log history):
+Rename CORRECT.md to Old.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2026-03-25T10:53:29Z -- [Pre-image] Prior state for ec6660db (`ec6660db-pre`)
+
+**Pair ID:** ec6660db
+
+**Author:** Anmol Chopra <anmolchopra@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit ec6660db (no prior introducing commit in log history):
+Fix hystrix timeout data race (#151)
+* Fix hystrix timeout data race
+
+* minor naming changes
+
+* address review comments
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2020-02-18T06:49:14Z -- [Pre-image] Prior state for 28627eed (`28627eed-pre`)
+
+**Pair ID:** 28627eed
+
+**Author:** Florian Fankhauser <florianfankhauser@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 28627eed (no prior introducing commit in log history):
+fix missing millisecond unit for hystrix timeout
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2020-01-27T08:14:05Z -- [Pre-image] Prior state for 93314ae5 (`93314ae5-pre`)
+
+**Pair ID:** 93314ae5
+
+**Author:** Rajeev N B <rajeevnb@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 93314ae5 (no prior introducing commit in log history):
+fix the path for coveralls badge
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2020-01-27T08:11:53Z -- [Pre-image] Prior state for f0f2058e (`f0f2058e-pre`)
+
+**Pair ID:** f0f2058e
+
+**Author:** Rajeev N B <rajeevnb@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit f0f2058e (no prior introducing commit in log history):
+fix the path for travis build status
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2019-03-27T20:28:25Z -- [Pre-image] Prior state for 31c1ef9a (`31c1ef9a-pre`)
+
+**Pair ID:** 31c1ef9a
+
+**Author:** Soham Kamani <sohamkamani@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 31c1ef9a (no prior introducing commit in log history):
+Fix package names
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2019-02-12T05:27:45Z -- [Pre-image] Prior state for 2ad3b6c1 (`2ad3b6c1-pre`)
+
+**Pair ID:** 2ad3b6c1
+
+**Author:** Palash Nigam <palashnigam@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 2ad3b6c1 (no prior introducing commit in log history):
+README.md: Add the correct import path
+Fixes: #49
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2019-01-07T07:15:12Z -- [Pre-image] Prior state for 1e5d5b54 (`1e5d5b54-pre`)
+
+**Pair ID:** 1e5d5b54
+
+**Author:** Arief Rahmansyah <ariefrahmansyah@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 1e5d5b54 (no prior introducing commit in log history):
+:pencil2: Fix typo for defaultHystrixTimeout
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2018-12-22T02:46:03Z -- [Pre-image] Prior state for f262d82a (`f262d82a-pre`)
+
+**Pair ID:** f262d82a
+
+**Author:** Rajeev N B <rajeevnb@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit f262d82a (no prior introducing commit in log history):
+add a . which was missing in doc, fixes #59
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2018-11-05T04:16:09Z -- [Pre-image] Prior state for d96502fe (`d96502fe-pre`)
+
+**Pair ID:** d96502fe
+
+**Author:** Unnikrishnan <unnikrishnan@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit d96502fe (no prior introducing commit in log history):
+Fixes hystrix timeout (#58)
+* Fixes hystrix timeout
+
+- Fixes issue where hystrix timeout was being set in nanosecond instead
+of millisecond
+
+* Adds test for duration to Int conversion
+
+- Improves implementation of durtationToInt
+- Adds test
+
+* Update golint import
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2018-06-24T05:48:14Z -- [Pre-image] Prior state for 58bd6e87 (`58bd6e87-pre`)
+
+**Pair ID:** 58bd6e87
+
+**Author:** Soham Kamani <sohamkamani@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 58bd6e87 (no prior introducing commit in log history):
+fix test
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
+
+
+
+## 2018-06-24T04:50:09Z -- [Pre-image] Prior state for 85e30c33 (`85e30c33-pre`)
+
+**Pair ID:** 85e30c33
+
+**Author:** Soham Kamani <sohamkamani@users.noreply.github.com>
+
+**Files touched:**
+- `heimdall.ts`
+
+**Commit message:**
+```
+Pre-image reconstructed from fix commit 85e30c33 (no prior introducing commit in log history):
+Fixes import cycle
+```
+
+**Diff:**
+```diff
+diff --git a/heimdall.ts b/heimdall.ts
+--- a/heimdall.ts
++++ b/heimdall.ts
+@@ -0,0 +1,1 @@
+```
