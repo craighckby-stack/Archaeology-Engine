@@ -103,3 +103,45 @@ As the Commit Archaeology Engine (CAE), I have processed the provided ledger of 
 * **The "Zero-Leak" Requirement:** Documentation implies that refactoring exercises (e.g., `Zero-Leak` alignment) were reactive responses to recurring integration failures. The system prioritizes immutability (frozen dataclasses) as a defense mechanism against its own mutation-cycle unpredictability.
 * **Heuristic Healing:** The commit `8673abb8` ("refactor: decouple heuristic healing from post-mortems") marks a critical architectural pivot. The decision to separate the "healing" (correction) logic from the "post-mortem" (logging) logic suggests that early attempts at automated self-repair were likely conflating observation with intervention, leading to feedback loops.
 * **Ephemeral Persistence:** The heavy use of temporary filenames (`gemini-code-*.py`) followed by mass renaming into canonical names (e.g., `03_auth_utils.py`) points to a workflow where the system generates code in transient "scratchpads" and attempts to promote them to the main build only after a successful internal verification gate.
+
+---
+
+## Appended Analysis Stream (2026-09-14 07:01:06)
+
+## Deterministic patterns
+
+**Most-touched files (Architectural hotspots):**
+- `server.ts` — 3 commits
+- `app.py` — 2 commits
+- `config.ts` — 1 commits
+- `docs/AUTH.md` — 1 commits
+
+**Files with iterative wrong->correct cycles (Hard-won lessons):**
+- `server.ts` — 1 failed-and-fixed cycles
+- `app.py` — 1 failed-and-fixed cycles
+
+**Recurring themes in commit subjects (sampled across 7 total commits, deduplicated per commit):**
+- `middleware` — 3 commits (43% of total corpus)
+- `auth` — 2 commits (29% of total corpus)
+- `config` — 1 commits (14% of total corpus)
+- `loader` — 1 commits (14% of total corpus)
+- `document` — 1 commits (14% of total corpus)
+- `flow` — 1 commits (14% of total corpus)
+- `reorder` — 1 commits (14% of total corpus)
+- `registration` — 1 commits (14% of total corpus)
+
+### 🎯 Semantic Retrieval & Embedding Priority Index (Firestore Vector Targets)
+> High-churn / high-recovery files prioritized for vector embedding into DARLEK semantic retrieval storage. These files yield the highest ROI for 'have I broken this before' similarity queries.
+
+1. `server.ts` — **Priority P0 (CRITICAL - Highest Fail/Fix Volume)** (1 fail-and-fixed recovery cycles)
+2. `app.py` — **Priority P1 (HIGH - Frequent Recovery Cycles)** (1 fail-and-fixed recovery cycles)
+
+--- 
+
+## LLM-surfaced patterns (Gemini)
+
+> *Sample Archaeological Corpus Intelligence (Pre-analyzed)*
+
+- **Architectural Hotspots Identified.** High commit churn observed in `app.py` (authentication validation logic) and `server.ts` (middleware registration sequence).
+- **Failure Modes & Recovery.** Inline token parsing was refactored into modular `require_auth` decorator middleware. Logger middleware order was fixed to prevent blocking static file serving.
+- **Code Evolution.** Rapid stabilization observed across structural scaffolding, auth guards, and documentation deliverables.
