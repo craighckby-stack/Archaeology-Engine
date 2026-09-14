@@ -982,3 +982,537 @@ diff --git a/heimdall.ts b/heimdall.ts
 @@ -0,0 +1,1 @@
 +[fix readme for http client initialisation]
 ```
+
+---
+
+<!-- CAE Append Session: 2026-09-14T06:47:45.381Z -->
+
+## 2026-09-14T06:41:22Z -- CAE: Append to CORRECT.md (`d95bbc02`)
+
+**Pair ID:** d95bbc02
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-14T06:37:28Z -- CAE: Create CORRECT.md (`dbb61b30`)
+
+**Pair ID:** dbb61b30
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-14T06:03:23Z -- CAE: Create CORRECT.md (`da96b73b`)
+
+**Pair ID:** da96b73b
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-14T05:41:48Z -- Delete CORRECT.md (`00819e21`)
+
+**Pair ID:** 00819e21
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Delete CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Delete CORRECT.md]
+```
+
+
+
+## 2026-09-14T04:58:54Z -- CAE: Create CORRECT.md (`b51a5679`)
+
+**Pair ID:** b51a5679
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-14T04:45:24Z -- CAE: Create CORRECT.md (`2516a10d`)
+
+**Pair ID:** 2516a10d
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-14T04:44:01Z -- Rename CORRECT.md to Old.md (`7057db47`)
+
+**Pair ID:** 7057db47
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+Rename CORRECT.md to Old.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[Rename CORRECT.md to Old.md]
+```
+
+
+
+## 2026-09-13T12:33:32Z -- CAE: Append to CORRECT.md (`e1232969`)
+
+**Pair ID:** e1232969
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:30:51Z -- CAE: Append to CORRECT.md (`605f8b12`)
+
+**Pair ID:** 605f8b12
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:29:06Z -- CAE: Append to CORRECT.md (`e973a7b6`)
+
+**Pair ID:** e973a7b6
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:26:00Z -- CAE: Append to CORRECT.md (`ca6f4366`)
+
+**Pair ID:** ca6f4366
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:21:52Z -- CAE: Append to CORRECT.md (`1cb9f467`)
+
+**Pair ID:** 1cb9f467
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:20:25Z -- CAE: Append to CORRECT.md (`bb6be77c`)
+
+**Pair ID:** bb6be77c
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:17:49Z -- CAE: Append to CORRECT.md (`f13f03c9`)
+
+**Pair ID:** f13f03c9
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:17:01Z -- CAE: Append to CORRECT.md (`9dfd570e`)
+
+**Pair ID:** 9dfd570e
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Append to CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Append to CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:15:28Z -- CAE: Create CORRECT.md (`501085de`)
+
+**Pair ID:** 501085de
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-13T12:13:30Z -- CAE: Create CORRECT.md (`c2a1794d`)
+
+**Pair ID:** c2a1794d
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Archaeology-Engine.ts`
+
+**Commit message:**
+```
+CAE: Create CORRECT.md
+```
+
+**Diff:**
+```diff
+diff --git a/Archaeology-Engine.ts b/Archaeology-Engine.ts
+--- a/Archaeology-Engine.ts
++++ b/Archaeology-Engine.ts
+@@ -0,0 +1,1 @@
++[CAE: Create CORRECT.md]
+```
+
+
+
+## 2026-09-13T11:03:35Z -- feat: add jszip and improve fix detection logic (`8ac3eec2`)
+
+**Pair ID:** 8ac3eec2
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Commit-puller-.ts`
+
+**Commit message:**
+```
+feat: add jszip and improve fix detection logic
+
+- Add jszip dependency for future archive handling
+- Improve file path extraction regex in diff parsing
+- Sort commits chronologically for more accurate immediate fix detection
+- Increase default commit fetch limit to 500
+```
+
+**Diff:**
+```diff
+diff --git a/Commit-puller-.ts b/Commit-puller-.ts
+--- a/Commit-puller-.ts
++++ b/Commit-puller-.ts
+@@ -0,0 +1,1 @@
++[feat: add jszip and improve fix detection logic]
+```
+
+
+
+## 2026-09-12T11:36:13Z -- EMG Core: Refactoring on patch.js (`c1ae3f92`)
+
+**Pair ID:** c1ae3f92
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `DARLEK-CAAN.ts`
+
+**Commit message:**
+```
+EMG Core: Refactoring on patch.js
+```
+
+**Diff:**
+```diff
+diff --git a/DARLEK-CAAN.ts b/DARLEK-CAAN.ts
+--- a/DARLEK-CAAN.ts
++++ b/DARLEK-CAAN.ts
+@@ -0,0 +1,1 @@
++[EMG Core: Refactoring on patch.js]
+```
+
+
+
+## 2026-08-24T23:06:53Z -- fix(security): redact exposed Google Gemini API Key in firebase-applet-config.json (`7271cd96`)
+
+**Pair ID:** 7271cd96
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Darlek-caan-.ts`
+
+**Commit message:**
+```
+fix(security): redact exposed Google Gemini API Key in firebase-applet-config.json
+```
+
+**Diff:**
+```diff
+diff --git a/Darlek-caan-.ts b/Darlek-caan-.ts
+--- a/Darlek-caan-.ts
++++ b/Darlek-caan-.ts
+@@ -0,0 +1,1 @@
++[fixsecurity: redact exposed Google Gemini API Key in firebase-applet-config.json]
+```
+
+
+
+## 2026-08-01T20:13:12Z -- [DARLEK CANN] Mutate patch.js (`d193e028`)
+
+**Pair ID:** d193e028
+
+**Author:** Craig Huckerby <craighuckerby@users.noreply.github.com>
+
+**Files touched:**
+- `Darlek-caan-.ts`
+
+**Commit message:**
+```
+[DARLEK CANN] Mutate patch.js
+```
+
+**Diff:**
+```diff
+diff --git a/Darlek-caan-.ts b/Darlek-caan-.ts
+--- a/Darlek-caan-.ts
++++ b/Darlek-caan-.ts
+@@ -0,0 +1,1 @@
++[[DARLEK CANN] Mutate patch.js]
+```
+
+
