@@ -1,0 +1,168 @@
+commit 31e8d7c6b5a4f3e2d1c0b9a87f6e5d4c3b2a1f0e
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 08:00:00 2026 +0000
+
+    feat: initial user profile route
+
+diff --git a/app.py b/app.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/app.py
+@@ -0,0 +1,2 @@
++def get_user_profile(req):
++    return {"user": "profile_data"}
+
+commit 42f941a87b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 08:30:00 2026 +0000
+
+    bug: add auth middleware stub
+    
+    Added placeholder verify_jwt decorator that returns True unconditionally.
+
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -1,2 +1,11 @@
++from functools import wraps
++
++def require_auth(f):
++    @wraps(f)
++    def decorated(req, *args, **kwargs):
++        # TODO: implement real jwt verification
++        return f(req, *args, **kwargs)
++    return decorated
++
++@require_auth
+ def get_user_profile(req):
+     return {"user": "profile_data"}
+
+commit 7689035e4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 09:10:00 2026 +0000
+
+    fix: extract jwt validation into middleware
+    
+    Stub middleware caused security bypass. Implemented real jwt.decode verification in decorator.
+
+diff --git a/app.py b/app.py
+index 2222222..3333333 100644
+--- a/app.py
++++ b/app.py
+@@ -1,11 +1,19 @@
++import jwt
+ from functools import wraps
+ 
+ def require_auth(f):
+     @wraps(f)
+     def decorated(req, *args, **kwargs):
+-        # TODO: implement real jwt verification
++        token = req.headers.get("Authorization", "")
++        if not token.startswith("Bearer "):
++            return {"error": "Unauthorized: Missing header"}, 401
++        try:
++            payload = jwt.decode(token.split(" ")[1], "secret", algorithms=["HS256"])
++            req.user = payload
++        except jwt.PyJWTError:
++            return {"error": "Unauthorized: Invalid signature"}, 401
+         return f(req, *args, **kwargs)
+     return decorated
+ 
+ @require_auth
+ def get_user_profile(req):
+
+commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 10:00:00 2026 +0000
+
+    feat: add server scaffold
+    
+    Express server setup with port binding.
+
+diff --git a/server.ts b/server.ts
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/server.ts
+@@ -0,0 +1,5 @@
++import express from 'express';
++
++const app = express();
++app.listen(3000);
+
+commit 234ab33d2211445566778899aabbccddeeff0011
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 10:30:00 2026 +0000
+
+    bug: register global logger before static route handler, blocking asset serving
+    
+    Registered global request logger ahead of static file serving, intercepting and breaking static asset delivery.
+
+diff --git a/server.ts b/server.ts
+index 1111111..2222222 100644
+--- a/server.ts
++++ b/server.ts
+@@ -1,4 +1,6 @@
+ import express from 'express';
+ 
+ const app = express();
++app.use(globalLogger);
++app.use('/static', express.static('dist'));
+ app.listen(3000);
+
+commit 5e4e56bee5e4e56bee5e4e56bee5e4e56bee5e4e
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 11:00:00 2026 +0000
+
+    fix: reorder middleware registration
+    
+    Global logger broke static asset serving. Reordered static handler before logger interceptor.
+
+diff --git a/server.ts b/server.ts
+index 2222222..3333333 100644
+--- a/server.ts
++++ b/server.ts
+@@ -2,5 +2,5 @@
+ 
+ const app = express();
+-app.use(globalLogger);
+-app.use('/static', express.static('dist'));
++app.use('/static', express.static('dist'));
++app.use(globalLogger);
+ app.listen(3000);
+
+commit f7e8d9c0b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 11:30:00 2026 +0000
+
+    document auth flow
+
+    Added markdown guide for API consumers.
+
+diff --git a/docs/AUTH.md b/docs/AUTH.md
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/docs/AUTH.md
+@@ -0,0 +1,3 @@
++# Auth Guide
++Bearer tokens required.
+
+commit b3a4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+Author: craighckby <craighckby@example.com>
+Date:   Sun Sep 13 12:00:00 2026 +0000
+
+    add config loader
+
+    Environment variables parser with dotenv.
+
+diff --git a/config.ts b/config.ts
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/config.ts
+@@ -0,0 +1,2 @@
++import dotenv from 'dotenv';
++dotenv.config();
