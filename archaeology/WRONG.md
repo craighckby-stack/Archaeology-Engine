@@ -1798,3 +1798,9 @@ index c13fbba..9cb1e34 100644
              consecutiveFailuresRef.current[target.path] =
                (consecutiveFailuresRef.current[target.path] || 0) + 1;
 ```
+
+---
+
+<!-- CAE Append Session: 2026-10-08T13:57:27.123Z -->
+
+# Archaeological Anti-Patterns (WRONG.md)
