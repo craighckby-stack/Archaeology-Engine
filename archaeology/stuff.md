@@ -81,3 +81,36 @@
 - **Architectural Hotspots Identified.** The commit corpus spanning 8 commits reveals concentrated modification in `server.ts` (3 revisions), `app.py` (3 revisions), `config.ts` (1 revisions). These files represent the highest architectural churn.
 - **Failure Modes & Recovery.** A total of 2 failure/fix cycles were recorded. Persistent recovery cycles were observed in `server.ts` (1 recovery cycles), `app.py` (1 recovery cycles), reflecting rapid trial-and-error turnaround before arriving at stable solutions.
 - **Skill Trajectory & Stability.** Analysis of commit frequency and subject categorization shows iterative stabilization over time, with bug-fixing commits decreasing in proportion relative to feature expansion in later stages.
+
+---
+
+## Appended Analysis Stream (2026-10-08 13:57:28)
+
+## Deterministic patterns
+
+**Most-touched files (Architectural hotspots):**
+- `memory/vectors.jsonl` — 66 commits
+- `memory/clean_patterns.md` — 50 commits
+- `STUDIO_ATTACHMENT_CORRECT.md` — 50 commits
+- `memory/failure_patterns.md` — 17 commits
+- `STUDIO_ATTACHMENT_WRONG.md` — 17 commits
+
+**Files with iterative wrong->correct cycles (Hard-won lessons):**
+- No recorded failure cycles detected in this corpus.
+
+**Recurring themes in commit subjects (sampled across 256 total commits, deduplicated per commit):**
+
+### 🎯 Semantic Retrieval & Embedding Priority Index (Firestore Vector Targets)
+> High-churn / high-recovery files prioritized for vector embedding into DARLEK semantic retrieval storage. These files yield the highest ROI for 'have I broken this before' similarity queries.
+
+_No high-recovery churn files currently warranting immediate vector indexing priority._
+
+--- 
+
+## LLM-surfaced patterns (Gemini)
+
+> *Note: Heuristic Archaeological Analysis generated from git commit telemetry (Gemini API rate-limit/quota currently active).*
+
+- **Architectural Hotspots Identified.** The commit corpus spanning 256 commits reveals concentrated modification in `memory/vectors.jsonl` (66 revisions), `memory/clean_patterns.md` (50 revisions), `STUDIO_ATTACHMENT_CORRECT.md` (50 revisions). These files represent the highest architectural churn.
+- **Failure Modes & Recovery.** A total of 0 failure/fix cycles were recorded. Persistent recovery cycles were observed in iterative fix commits, reflecting rapid trial-and-error turnaround before arriving at stable solutions.
+- **Skill Trajectory & Stability.** Analysis of commit frequency and subject categorization shows iterative stabilization over time, with bug-fixing commits decreasing in proportion relative to feature expansion in later stages.
