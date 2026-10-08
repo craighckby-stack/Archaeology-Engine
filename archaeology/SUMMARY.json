@@ -1,57 +1,47 @@
 {
   "stats": {
-    "total": 8,
-    "totalCorrect": 2,
-    "totalWrong": 2,
-    "totalPairs": 2,
-    "totalNeutral": 3,
-    "totalDocs": 1,
+    "total": 256,
+    "totalCorrect": 0,
+    "totalWrong": 0,
+    "totalPairs": 0,
+    "totalNeutral": 117,
+    "totalDocs": 139,
     "fileCounts": {
-      "config.ts": 1,
-      "docs/AUTH.md": 1,
-      "server.ts": 3,
-      "app.py": 3
+      "src/emg/sanitizer.ts": 6,
+      "memory/failure_patterns.md": 17,
+      "STUDIO_ATTACHMENT_WRONG.md": 17,
+      "memory/vectors.jsonl": 66,
+      "memory/clean_patterns.md": 50,
+      "STUDIO_ATTACHMENT_CORRECT.md": 50,
+      "src/core/ast-diff-gate.ts": 4,
+      "src/engines/sanitized-catalogue.ts": 3,
+      "src/emg/emg-rag.ts": 5,
+      "docs/POSTMORTEMS.md": 5,
+      "src/components/AgentEnginesHub.tsx": 3,
+      "src/core/siphon.ts": 4,
+      "src/core/binaryShield.ts": 4,
+      "check_repo.ts": 2,
+      "view_corrupted.ts": 2,
+      "src/firebase.ts": 3,
+      "src/components/AstDiffModal.tsx": 2,
+      "scan_corruption.ts": 2,
+      "fix_corrupted.ts": 2,
+      "view_file.ts": 2,
+      "src/emg/zero-leak-sandbox.ts": 2,
+      "src/components/DebateChamber.tsx": 1,
+      "analyze_logs.ts": 1,
+      "src/vite-env.d.ts": 1,
+      "src/engines/clean-room-runtime.ts": 1,
+      "src/emg/halt.ts": 1
     },
-    "wrongCorrectCycles": {
-      "server.ts": 1,
-      "app.py": 1
-    },
-    "themeCounts": {
-      "config": 1,
-      "loader": 1,
-      "document": 1,
-      "auth": 2,
-      "flow": 1,
-      "reorder": 1,
-      "middleware": 3,
-      "registration": 1,
-      "register": 1,
-      "global": 1,
-      "logger": 1,
-      "before": 1,
-      "static": 1,
-      "route": 2,
-      "handler": 1,
-      "blocking": 1,
-      "asset": 1,
-      "serving": 1,
-      "feat": 2,
-      "server": 1,
-      "scaffold": 1,
-      "extract": 1,
-      "validation": 1,
-      "into": 1,
-      "stub": 1,
-      "initial": 1,
-      "user": 1,
-      "profile": 1
-    },
+    "wrongCorrectCycles": {},
+    "themeCounts": {},
     "dateCounts": {
-      "2026-09-13": 8
+      "2026-10-08": 256
     }
   },
-  "totalCommits": 8,
-  "timestamp": "2026-10-08T13:43:10.277Z",
+  "totalCommits": 256,
+  "timestamp": "2026-10-08T13:52:49.251Z",
   "runs": [
     {
       "stats": {
@@ -162,7 +152,52 @@
       },
       "totalCommits": 8,
       "timestamp": "2026-10-08T13:43:10.277Z"
+    },
+    {
+      "stats": {
+        "total": 256,
+        "totalCorrect": 0,
+        "totalWrong": 0,
+        "totalPairs": 0,
+        "totalNeutral": 117,
+        "totalDocs": 139,
+        "fileCounts": {
+          "src/emg/sanitizer.ts": 6,
+          "memory/failure_patterns.md": 17,
+          "STUDIO_ATTACHMENT_WRONG.md": 17,
+          "memory/vectors.jsonl": 66,
+          "memory/clean_patterns.md": 50,
+          "STUDIO_ATTACHMENT_CORRECT.md": 50,
+          "src/core/ast-diff-gate.ts": 4,
+          "src/engines/sanitized-catalogue.ts": 3,
+          "src/emg/emg-rag.ts": 5,
+          "docs/POSTMORTEMS.md": 5,
+          "src/components/AgentEnginesHub.tsx": 3,
+          "src/core/siphon.ts": 4,
+          "src/core/binaryShield.ts": 4,
+          "check_repo.ts": 2,
+          "view_corrupted.ts": 2,
+          "src/firebase.ts": 3,
+          "src/components/AstDiffModal.tsx": 2,
+          "scan_corruption.ts": 2,
+          "fix_corrupted.ts": 2,
+          "view_file.ts": 2,
+          "src/emg/zero-leak-sandbox.ts": 2,
+          "src/components/DebateChamber.tsx": 1,
+          "analyze_logs.ts": 1,
+          "src/vite-env.d.ts": 1,
+          "src/engines/clean-room-runtime.ts": 1,
+          "src/emg/halt.ts": 1
+        },
+        "wrongCorrectCycles": {},
+        "themeCounts": {},
+        "dateCounts": {
+          "2026-10-08": 256
+        }
+      },
+      "totalCommits": 256,
+      "timestamp": "2026-10-08T13:52:49.251Z"
     }
   ],
-  "lastAppendedAt": "2026-10-08T13:43:21.724Z"
+  "lastAppendedAt": "2026-10-08T13:57:36.807Z"
 }
