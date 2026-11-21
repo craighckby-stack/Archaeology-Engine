@@ -1,0 +1,88 @@
+{
+  "stats": {
+    "total": 2,
+    "totalCorrect": 0,
+    "totalWrong": 0,
+    "totalPairs": 0,
+    "totalNeutral": 2,
+    "totalDocs": 0,
+    "fileCounts": {
+      "src/App.tsx": 2,
+      "src/components/ExtractionPanel.tsx": 2,
+      "src/utils/aiOrchestrator.ts": 2,
+      "src/utils/core.test.ts": 2,
+      "src/utils/offlineStore.ts": 2,
+      ".env.example": 1,
+      ".gitignore": 1,
+      "index.html": 1,
+      "package.json": 1,
+      "server.ts": 1,
+      "src/components/CredentialsPanel.tsx": 1,
+      "src/components/DestinationPanel.tsx": 1,
+      "src/components/ToastStack.tsx": 1,
+      "src/components/TopBar.tsx": 1,
+      "src/components/WorkspaceOutput.tsx": 1,
+      "src/index.css": 1,
+      "src/main.tsx": 1,
+      "src/types/git.ts": 1,
+      "src/utils/classifier.ts": 1,
+      "src/utils/demoData.ts": 1,
+      "src/utils/engineHarvester.ts": 1,
+      "src/utils/formatter.ts": 1,
+      "src/utils/githubClient.ts": 1,
+      "src/utils/rateLimiter.ts": 1,
+      "src/utils/sources.ts": 1,
+      "tsconfig.json": 1,
+      "vite.config.ts": 1
+    },
+    "wrongCorrectCycles": {},
+    "themeCounts": {
+      "eliminate": 1,
+      "redundant": 1,
+      "offline": 1,
+      "detection": 1,
+      "logic": 2,
+      "warnings": 1,
+      "indexeddb": 1,
+      "storage": 1,
+      "management": 1,
+      "simplify": 1,
+      "codebase": 1,
+      "initialize": 1,
+      "react": 1,
+      "project": 1,
+      "vite": 1,
+      "tailwind": 1,
+      "core": 1,
+      "dual": 1,
+      "commit": 1,
+      "classification": 1,
+      "configured": 1,
+      "environment": 1,
+      "variables": 1,
+      "build": 1,
+      "pipeline": 1,
+      "github": 1,
+      "history": 1,
+      "aggregation": 1
+    },
+    "dateCounts": {
+      "2026-11-20": 1,
+      "2026-11-19": 1
+    }
+  },
+  "repos": [
+    {
+      "repo": "craighckby-stack/GitHistory-Sync",
+      "totalCommits": 3,
+      "source": "github-live",
+      "branches": [
+        "main"
+      ]
+    }
+  ],
+  "totalCommits": 2,
+  "unredacted": true,
+  "selectAll": true,
+  "timestamp": "2026-11-21T07:17:02.063Z"
+}
