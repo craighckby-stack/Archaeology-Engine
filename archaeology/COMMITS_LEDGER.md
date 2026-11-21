@@ -17015,3 +17015,8513 @@ index 0000000..8f86cd0
 +  };
 +});
 ```
+
+---
+
+# Complete Unredacted Commit Ledger
+
+Total Commits Analyzed: 2
+
+### [NEUTRAL] 06135790 - Eliminate redundant offline detection logic, UI warnings, and IndexedDB storage management to simplify the codebase.
+**Author:** Unknown | **Date:** Fri, 20 Nov 2026 12:23:22 +1000
+**Note:** Net-new feature / scaffold addition without paired bug fix (excluded from training ledger)
+
+```diff
+---
+ src/App.tsx                        | 233 ++++-------------------------
+ src/components/ExtractionPanel.tsx |  48 ++----
+ src/utils/aiOrchestrator.ts        |  77 +---------
+ src/utils/core.test.ts             |  10 --
+ src/utils/offlineStore.ts          | 118 ---------------
+ 5 files changed, 51 insertions(+), 435 deletions(-)
+ delete mode 100644 src/utils/offlineStore.ts
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 127d5ea..8f15ed8 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -30,7 +30,6 @@ import {
+   pushSplitArchivesToGitHub,
+   verifyGitHubToken,
+ } from './utils/githubClient';
+-import { loadOfflineSnapshot, saveOfflineSnapshot } from './utils/offlineStore';
+ import { sleepWithAbort } from './utils/rateLimiter';
+ import { DEFAULT_BASE_PATH, deriveLogPaths, matchesRepoFilter, validateDestination } from './utils/sources';
+ 
+@@ -82,9 +81,6 @@ export default function App() {
+   const [user, setUser] = useState<GitHubUser | null>(null);
+   const [isDemo, setIsDemo] = useState(false);
+   const [isVerifying, setIsVerifying] = useState(false);
+-  const [isOffline, setIsOffline] = useState(() =>
+-    typeof navigator !== 'undefined' ? navigator.onLine === false : false
+-  );
+ 
+   const [extraction, setExtraction] = useState<ExtractionSettings>(() => {
+     try {
+@@ -168,23 +164,6 @@ export default function App() {
+     setLogs((prev) => [...prev.slice(-399), { id, timestamp: nowStamp(), level, message }]);
+   }, []);
+ 
+-  useEffect(() => {
+-    const handleOnline = () => {
+-      setIsOffline(false);
+-      appendLog('Network connection restored.', 'success');
+-    };
+-    const handleOffline = () => {
+-      setIsOffline(true);
+-      appendLog('Connection went offline — continuing with cached local archives & offline heuristics.', 'warn');
+-    };
+-    window.addEventListener('online', handleOnline);
+-    window.addEventListener('offline', handleOffline);
+-    return () => {
+-      window.removeEventListener('online', handleOnline);
+-      window.removeEventListener('offline', handleOffline);
+-    };
+-  }, [appendLog]);
+-
+   const handleExtractionChange = useCallback(
+     <K extends keyof ExtractionSettings>(key: K, value: ExtractionSettings[K]) => {
+       setExtraction((prev) => ({ ...prev, [key]: value }));
+@@ -236,25 +215,6 @@ export default function App() {
+     }));
+   }, [commits.length, engines.length, splitArchives.combinedBytes]);
+ 
+-  const persistSnapshot = useCallback(
+-    async (
+-      nextStats: FetchStats,
+-      nextCommits: ClassifiedCommit[],
+-      nextEngines: SiphonedEngine[],
+-      nextLogs: ActivityEntry[]
+-    ) => {
+-      if (nextCommits.length === 0 && nextEngines.length === 0) return;
+-      await saveOfflineSnapshot({
+-        savedAt: new Date().toISOString(),
+-        stats: nextStats,
+-        commits: nextCommits,
+-        engines: nextEngines,
+-        logs: nextLogs.slice(-200),
+-      });
+-    },
+-    []
+-  );
+-
+   const handleLoadDemo = useCallback(async () => {
+     if (isFetching) return;
+     const demoStartedAt = Date.now();
+@@ -271,6 +231,7 @@ export default function App() {
+       'info'
+     );
+ 
++    // Run immediate heuristic classification (skipping external network calls on initial demo load)
+     const heuristicOnlySettings: ExtractionSettings = {
+       ...extraction,
+       useGemini: false,
+@@ -287,72 +248,34 @@ export default function App() {
+       for (const b of c.branches) uniqueBranches.add(`${c.repo}:${b}`);
+     }
+ 
+-    const demoStats: FetchStats = {
++    setCommits(classified);
++    setEngines(DEMO_ENGINES);
++    setStats({
+       reposScanned: DEMO_REPOS.length,
+       reposTotal: DEMO_REPOS.length,
+       branchesScanned: uniqueBranches.size,
+       uniqueCommits: classified.length,
+       enginesSiphoned: DEMO_ENGINES.length,
+       combinedBytes: 0,
+-    };
+-    setCommits(classified);
+-    setEngines(DEMO_ENGINES);
+-    setStats(demoStats);
++    });
+     setLastRunDurationMs(Date.now() - demoStartedAt);
+     appendLog(
+       'Demo archives & unredacted engines compiled. Switch to the Engines tab to inspect full source code.',
+       'success'
+     );
+     addToast('Demo workspace loaded with commit logs and full unredacted engines.', 'success');
+-    void persistSnapshot(demoStats, classified, DEMO_ENGINES, []);
+-  }, [appendLog, addToast, extraction, isFetching, persistSnapshot]);
+-
+-  const hasActiveDataRef = useRef(false);
+-  useEffect(() => {
+-    if (commits.length > 0 || engines.length > 0 || isFetching) {
+-      hasActiveDataRef.current = true;
+-    }
+-  }, [commits.length, engines.length, isFetching]);
++  }, [appendLog, addToast, extraction, isFetching]);
+ 
+   useEffect(() => {
+     const params = new URLSearchParams(window.location.search);
+     if (params.get('autostart') === '1') {
+       void handleLoadDemo();
+-      return;
+-    }
+-    if (params.get('fresh') === '1') {
+-      return;
+     }
+-
+-    let cancelled = false;
+-    void loadOfflineSnapshot().then((snapshot) => {
+-      if (cancelled || !snapshot || hasActiveDataRef.current) return;
+-      setCommits(snapshot.commits);
+-      setEngines(snapshot.engines);
+-      setStats(snapshot.stats);
+-      setLogs([
+-        ...snapshot.logs,
+-        {
+-          id: `restore-${Date.now()}`,
+-          timestamp: nowStamp(),
+-          level: 'info',
+-          message: `Restored local offline cache (${snapshot.commits.length} commits, ${snapshot.engines.length} full engines from ${snapshot.savedAt.slice(0, 19).replace('T', ' ')}).`,
+-        },
+-      ]);
+-    });
+-
+-    return () => {
+-      cancelled = true;
+-    };
+-    // Run once on mount to handle autostart or restore previous offline snapshot
++    // Run only once on mount if ?autostart=1 is present
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []);
+ 
+   const handleVerifyToken = async () => {
+-    if (isOffline) {
+-      addToast('Cannot verify token while offline.', 'warning');
+-      return;
+-    }
+     const trimmed = token.trim();
+     if (!trimmed) {
+       setVerifiedToken('');
+@@ -393,34 +316,8 @@ export default function App() {
+ 
+   const hasExternalSources = extraction.sources.trim().length > 0;
+ 
+-  const handleReclassifyOffline = async () => {
+-    if (isFetching || commits.length === 0) return;
+-    const startedAt = Date.now();
+-    appendLog(
+-      `Re-classifying ${commits.length} locally loaded commits offline (heuristic & revert engine, zero LLM calls)...`,
+-      'info'
+-    );
+-    const localOnly: ExtractionSettings = {
+-      ...extraction,
+-      useGemini: false,
+-      useLlm: false,
+-    };
+-    const reclassified = await classifyAndOrchestrate(commits, localOnly, appendLog);
+-    setCommits(reclassified);
+-    const elapsed = Date.now() - startedAt;
+-    setLastRunDurationMs(elapsed);
+-    const okTotal = reclassified.filter((c) => c.classification === 'successful').length;
+-    const failTotal = reclassified.length - okTotal;
+-    appendLog(
+-      `Offline local classification finished in ${formatDurationMs(elapsed)}: ${okTotal} successful, ${failTotal} failed.`,
+-      'success'
+-    );
+-    addToast(`Re-classified ${reclassified.length} commits offline in ${formatDurationMs(elapsed)}.`, 'success');
+-    void persistSnapshot(stats, reclassified, engines, logs);
+-  };
+-
+   const handleFetchAndClassify = async () => {
+-    if ((!user && !hasExternalSources) || isFetching || isOffline) return;
++    if ((!user && !hasExternalSources) || isFetching) return;
+     if (extraction.sinceDate && extraction.untilDate && extraction.sinceDate > extraction.untilDate) {
+       addToast('The From date must be before the To date.', 'warning');
+       return;
+@@ -441,13 +338,13 @@ export default function App() {
+     setCommits([]);
+     setEngines([]);
+ 
+-    let mergedCommits: RawCommit[] = [];
+-    let mergedEngines: SiphonedEngine[] = [];
+-    let totalRepos = 0;
+-    let scannedRepos = 0;
+-    let totalBranches = 0;
+-
+     try {
++      let rawCommits: RawCommit[] = [];
++      let harvestedEngines: SiphonedEngine[] = [];
++      let totalRepos = 0;
++      let scannedRepos = 0;
++      let totalBranches = 0;
++
+       if (isDemo) {
+         setTaskTimer({
+           label: 'Demo workspace',
+@@ -465,7 +362,7 @@ export default function App() {
+         totalRepos = filteredRepos.length;
+         const allowedNames = new Set(filteredRepos.map((r) => r.full_name));
+ 
+-        mergedCommits = DEMO_COMMITS.filter((c) => {
++        rawCommits = DEMO_COMMITS.filter((c) => {
+           if (!allowedNames.has(c.repo)) return false;
+           const dateOnly = c.date.slice(0, 10);
+           if (extraction.sinceDate && dateOnly < extraction.sinceDate) return false;
+@@ -476,13 +373,13 @@ export default function App() {
+           authorEmail: extraction.includeEmails ? c.authorEmail : undefined,
+         }));
+ 
+-        mergedEngines = extraction.siphonEngines
++        harvestedEngines = extraction.siphonEngines
+           ? DEMO_ENGINES.filter((e) => allowedNames.has(e.repo))
+           : [];
+ 
+         scannedRepos = filteredRepos.length;
+         const bSet = new Set<string>();
+-        for (const c of mergedCommits) {
++        for (const c of rawCommits) {
+           for (const b of c.branches) bSet.add(`${c.repo}:${b}`);
+         }
+         totalBranches = bSet.size;
+@@ -491,8 +388,8 @@ export default function App() {
+           reposScanned: scannedRepos,
+           reposTotal: totalRepos,
+           branchesScanned: totalBranches,
+-          uniqueCommits: mergedCommits.length,
+-          enginesSiphoned: mergedEngines.length,
++          uniqueCommits: rawCommits.length,
++          enginesSiphoned: harvestedEngines.length,
+           combinedBytes: 0,
+         });
+       } else {
+@@ -526,6 +423,9 @@ export default function App() {
+           return;
+         }
+ 
++        const mergedCommits: RawCommit[] = [];
++        const mergedEngines: SiphonedEngine[] = [];
++
+         for (let repoIndex = 0; repoIndex < repos.length; repoIndex += 1) {
+           const repo = repos[repoIndex];
+           if (controller.signal.aborted) throw new Error('Operation cancelled.');
+@@ -607,15 +507,9 @@ export default function App() {
+               );
+             }
+           } catch (err) {
+-            const msg = err instanceof Error ? err.message : String(err);
+-            if (controller.signal.aborted || msg === 'Operation cancelled.') {
+-              throw err;
+-            }
+             scannedRepos += 1;
++            const msg = err instanceof Error ? err.message : String(err);
+             appendLog(`Error scanning ${repo.full_name}: ${msg}`, 'warn');
+-            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+-              throw new Error('Network went offline during repository scan.');
+-            }
+           }
+ 
+           if (repoIndex + 1 < totalRepos) {
+@@ -630,6 +524,7 @@ export default function App() {
+           }
+         }
+ 
++        // Sort newest first
+         mergedCommits.sort((a, b) => (b.date > a.date ? 1 : -1));
+ 
+         if (extraction.ciLookup && mergedCommits.length > 0) {
+@@ -656,11 +551,14 @@ export default function App() {
+             }
+           }
+         }
++
++        rawCommits = mergedCommits;
++        harvestedEngines = mergedEngines;
+       }
+ 
+       setProgressPct(72);
+       const classified = await classifyAndOrchestrate(
+-        mergedCommits,
++        rawCommits,
+         extraction,
+         appendLog,
+         controller.signal,
+@@ -675,71 +573,23 @@ export default function App() {
+       );
+ 
+       setCommits(classified);
+-      setEngines(mergedEngines);
++      setEngines(harvestedEngines);
+       setProgressPct(100);
+       const totalElapsedMs = Date.now() - runStartedAt;
+       const okTotal = classified.filter((c) => c.classification === 'successful').length;
+       const failTotal = classified.length - okTotal;
+       appendLog(
+-        `Archive compiled in ${formatDurationMs(totalElapsedMs)}: ${okTotal} successful, ${failTotal} failed, ${mergedEngines.length} full engines across ${scannedRepos} repositories.`,
++        `Archive compiled in ${formatDurationMs(totalElapsedMs)}: ${okTotal} successful, ${failTotal} failed, ${harvestedEngines.length} full engines across ${scannedRepos} repositories.`,
+         'success'
+       );
+       addToast(
+-        `Compiled ${classified.length} commits & ${mergedEngines.length} full engines in ${formatDurationMs(totalElapsedMs)}.`,
++        `Compiled ${classified.length} commits & ${harvestedEngines.length} full engines in ${formatDurationMs(totalElapsedMs)}.`,
+         'success'
+       );
+-      void persistSnapshot(
+-        {
+-          reposScanned: scannedRepos,
+-          reposTotal: totalRepos,
+-          branchesScanned: totalBranches,
+-          uniqueCommits: classified.length,
+-          enginesSiphoned: mergedEngines.length,
+-          combinedBytes: 0,
+-        },
+-        classified,
+-        mergedEngines,
+-        logs
+-      );
+     } catch (err) {
+       const msg = err instanceof Error ? err.message : String(err);
+       appendLog(`Extraction stopped: ${msg}`, 'error');
+-
+-      // Always preserve partial commits & unredacted engines harvested before interruption/offline
+-      if (mergedCommits.length > 0 || mergedEngines.length > 0) {
+-        const offlineFallbackSettings: ExtractionSettings = {
+-          ...extraction,
+-          useGemini: false,
+-          useLlm: false,
+-        };
+-        const partialClassified = await classifyAndOrchestrate(
+-          mergedCommits,
+-          offlineFallbackSettings,
+-          appendLog
+-        );
+-        setCommits(partialClassified);
+-        setEngines(mergedEngines);
+-        const partialStats: FetchStats = {
+-          reposScanned: scannedRepos,
+-          reposTotal: totalRepos,
+-          branchesScanned: totalBranches,
+-          uniqueCommits: partialClassified.length,
+-          enginesSiphoned: mergedEngines.length,
+-          combinedBytes: 0,
+-        };
+-        setStats(partialStats);
+-        appendLog(
+-          `Preserved partial offline archive: ${partialClassified.length} commits and ${mergedEngines.length} full unredacted engines saved locally.`,
+-          'warn'
+-        );
+-        addToast(
+-          `Saved ${partialClassified.length} commits & ${mergedEngines.length} engines collected before interruption.`,
+-          'warning'
+-        );
+-        void persistSnapshot(partialStats, partialClassified, mergedEngines, logs);
+-      } else {
+-        addToast(msg, 'error');
+-      }
++      addToast(msg, 'error');
+     } finally {
+       setLastRunDurationMs(Date.now() - runStartedAt);
+       setTaskTimer(null);
+@@ -754,11 +604,6 @@ export default function App() {
+   };
+ 
+   const handleTestGemini = async () => {
+-    if (isOffline) {
+-      setGeminiStatusText('Offline — cannot reach Gemini server endpoint.');
+-      addToast('Offline mode active.', 'warning');
+-      return;
+-    }
+     setIsTestingGemini(true);
+     setGeminiStatusText('Testing...');
+     try {
+@@ -788,11 +633,6 @@ export default function App() {
+   };
+ 
+   const handleTestNvidia = async () => {
+-    if (isOffline) {
+-      setNvidiaStatusText('Offline — cannot reach NVIDIA NIM relay.');
+-      addToast('Offline mode active.', 'warning');
+-      return;
+-    }
+     setIsTestingNvidia(true);
+     setNvidiaStatusText('Testing...');
+     try {
+@@ -815,10 +655,6 @@ export default function App() {
+   };
+ 
+   const handlePushToGitHub = async () => {
+-    if (isOffline) {
+-      addToast('Cannot push to GitHub while offline. Use Download all to export locally.', 'warning');
+-      return;
+-    }
+     try {
+       validateDestination(destination.targetRepo, destination.targetBranch, destination.targetPath);
+     } catch (err) {
+@@ -957,7 +793,7 @@ export default function App() {
+               Dual-LLM Commit History &amp; Footprint Classifier
+             </h1>
+             <p className="text-sm text-slate-400 mt-1.5 max-w-2xl leading-relaxed">
+-              Aggregate multi-branch GitHub commits and full unredacted runtime engines in one pass, classify outcomes with Gemini 4 Carbon High Thinking &amp; NVIDIA NIM (with automatic offline &amp; quota heuristic fallback), and push split archives to V1.
++              Aggregate multi-branch GitHub commits and full unredacted runtime engines in one pass, classify outcomes with Gemini 4 Carbon High Thinking &amp; NVIDIA NIM, and push split archives to V1.
+             </p>
+           </div>
+           <p className="text-xs font-mono text-slate-400 shrink-0">
+@@ -982,10 +818,7 @@ export default function App() {
+               onChange={handleExtractionChange}
+               canFetch={Boolean(user) || hasExternalSources}
+               isFetching={isFetching}
+-              isOffline={isOffline}
+-              hasLocalData={commits.length > 0 || engines.length > 0}
+               onFetch={() => void handleFetchAndClassify()}
+-              onReclassifyOffline={() => void handleReclassifyOffline()}
+               onStop={handleStop}
+               onTestGemini={handleTestGemini}
+               onTestNvidia={handleTestNvidia}
+diff --git a/src/components/ExtractionPanel.tsx b/src/components/ExtractionPanel.tsx
+index c51668c..70f1d76 100644
+--- a/src/components/ExtractionPanel.tsx
++++ b/src/components/ExtractionPanel.tsx
+@@ -1,5 +1,5 @@
+ import { useState } from 'react';
+-import { ChevronDown, Cpu, DownloadCloud, ListPlus, Loader2, Square, WifiOff } from 'lucide-react';
++import { ChevronDown, DownloadCloud, ListPlus, Loader2, Square } from 'lucide-react';
+ import type { AiStrategy, BranchScope, ExtractionSettings } from '../types/git';
+ import { CURATED_PRESETS, appendPresetToSources } from '../utils/sources';
+ 
+@@ -8,10 +8,7 @@ interface ExtractionPanelProps {
+   onChange: <K extends keyof ExtractionSettings>(key: K, value: ExtractionSettings[K]) => void;
+   canFetch: boolean;
+   isFetching: boolean;
+-  isOffline: boolean;
+-  hasLocalData: boolean;
+   onFetch: () => void;
+-  onReclassifyOffline: () => void;
+   onStop: () => void;
+   onTestGemini: () => Promise<void>;
+   onTestNvidia: () => Promise<void>;
+@@ -26,10 +23,7 @@ export function ExtractionPanel({
+   onChange,
+   canFetch,
+   isFetching,
+-  isOffline,
+-  hasLocalData,
+   onFetch,
+-  onReclassifyOffline,
+   onStop,
+   onTestGemini,
+   onTestNvidia,
+@@ -501,38 +495,16 @@ export function ExtractionPanel({
+         </details>
+ 
+         <div className="pt-2 space-y-2">
+-          {isOffline && (
+-            <div className="flex items-start gap-2 rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 leading-relaxed">
+-              <WifiOff className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+-              <span>
+-                You are offline. Remote GitHub/LLM calls are paused, while locally cached commits, full engines, exports, and heuristic classification remain active.
+-              </span>
+-            </div>
+-          )}
+-
+           {!isFetching ? (
+-            <>
+-              <button
+-                type="button"
+-                onClick={onFetch}
+-                disabled={!canFetch || isOffline}
+-                className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors whitespace-nowrap disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+-              >
+-                <DownloadCloud className="w-4 h-4" aria-hidden="true" />
+-                {isOffline ? 'Offline (remote pull unavailable)' : 'Pull & classify commit history'}
+-              </button>
+-
+-              {hasLocalData && (
+-                <button
+-                  type="button"
+-                  onClick={onReclassifyOffline}
+-                  className="w-full flex items-center justify-center gap-2 text-xs font-medium py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+-                >
+-                  <Cpu className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
+-                  Re-classify loaded archive locally (no LLM)
+-                </button>
+-              )}
+-            </>
++            <button
++              type="button"
++              onClick={onFetch}
++              disabled={!canFetch}
++              className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors whitespace-nowrap disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++            >
++              <DownloadCloud className="w-4 h-4" aria-hidden="true" />
++              Pull &amp; classify commit history
++            </button>
+           ) : (
+             <button
+               type="button"
+diff --git a/src/utils/aiOrchestrator.ts b/src/utils/aiOrchestrator.ts
+index e39aabc..7ebda6b 100644
+--- a/src/utils/aiOrchestrator.ts
++++ b/src/utils/aiOrchestrator.ts
+@@ -130,12 +130,6 @@ async function callNvidiaBatch(
+   return data.verdicts ?? [];
+ }
+ 
+-export function isTerminalAiQuotaOrOfflineError(message: string): boolean {
+-  return /429|RESOURCE_EXHAUSTED|quota|limit:\s*0|billing|not configured|missing|rejected|401|402|403|404|Failed to fetch|NetworkError|ECONNREFUSED|ENOTFOUND|offline|timed out/i.test(
+-    message
+-  );
+-}
+-
+ export function shouldUseModels(settings: ExtractionSettings): {
+   runGemini: boolean;
+   runNvidia: boolean;
+@@ -188,18 +182,7 @@ export async function classifyAndOrchestrate(
+     'info'
+   );
+ 
+-  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+-  const { runGemini: cfgGemini, runNvidia: cfgNvidia, strategy } = shouldUseModels(settings);
+-  let geminiTripped = !cfgGemini || isOffline;
+-  let nvidiaTripped = !cfgNvidia || isOffline;
+-
+-  if (isOffline && (cfgGemini || cfgNvidia) && ambiguousQueue.length > 0) {
+-    onLog(
+-      'Offline mode detected — skipping cloud LLM requests and completing classification locally via deterministic heuristics.',
+-      'warn'
+-    );
+-  }
+-
++  const { runGemini, runNvidia, strategy } = shouldUseModels(settings);
+   const eligible = ambiguousQueue.filter((c) => settings.nvPrivate || !c.isPrivate);
+ 
+   if (!settings.nvPrivate && ambiguousQueue.some((c) => c.isPrivate)) {
+@@ -210,23 +193,12 @@ export async function classifyAndOrchestrate(
+   const nvidiaMap = new Map<string, LlmVerdict>();
+   const tieBreakerMap = new Map<string, LlmVerdict>();
+   let loggedBackupNotice = false;
+-  let geminiFailures = 0;
+-  let nvidiaFailures = 0;
+ 
+-  if (eligible.length > 0 && (!geminiTripped || !nvidiaTripped)) {
++  if (eligible.length > 0 && (runGemini || runNvidia)) {
+     const batchSize = 15;
+     const totalBatches = Math.ceil(eligible.length / batchSize);
+     for (let i = 0; i < eligible.length; i += batchSize) {
+       if (signal?.aborted) throw new Error('Operation cancelled.');
+-      if (geminiTripped && nvidiaTripped) {
+-        const remaining = eligible.length - i;
+-        onLog(
+-          `All enabled LLMs reached quota/offline limits — classifying remaining ${remaining} commit(s) locally with zero interruption.`,
+-          'warn'
+-        );
+-        break;
+-      }
+-
+       const batchNum = Math.floor(i / batchSize) + 1;
+       const slice = eligible.slice(i, i + batchSize);
+       const batchStartedAt = Date.now();
+@@ -245,12 +217,11 @@ export async function classifyAndOrchestrate(
+ 
+       const tasks: Promise<void>[] = [];
+ 
+-      if (!geminiTripped) {
++      if (runGemini) {
+         const gemRole = strategy === 'specialist' ? 'specialist_success' : 'primary';
+         tasks.push(
+           callGeminiBatch(payload, gemRole, settings.useGeminiBackup, undefined, signal)
+             .then(({ verdicts, modelUsed, usedBackup, primaryError }) => {
+-              geminiFailures = 0;
+               if (usedBackup && !loggedBackupNotice) {
+                 loggedBackupNotice = true;
+                 onLog(
+@@ -269,22 +240,12 @@ export async function classifyAndOrchestrate(
+             })
+             .catch((err) => {
+               const msg = err instanceof Error ? err.message : String(err);
+-              if (signal?.aborted || msg === 'Operation cancelled.') throw err;
+-              geminiFailures += 1;
+-              if (isTerminalAiQuotaOrOfflineError(msg) || geminiFailures >= 2) {
+-                geminiTripped = true;
+-                onLog(
+-                  `Gemini limit/offline reached (${msg}) — bypassing Gemini for remaining batches so processing continues locally.`,
+-                  'warn'
+-                );
+-              } else {
+-                onLog(`Gemini review error: ${msg}`, 'error');
+-              }
++              onLog(`Gemini review error: ${msg}`, 'error');
+             })
+         );
+       }
+ 
+-      if (!nvidiaTripped) {
++      if (runNvidia) {
+         const nvRole = strategy === 'specialist' ? 'specialist_risk' : 'primary';
+         tasks.push(
+           callNvidiaBatch(
+@@ -298,7 +259,6 @@ export async function classifyAndOrchestrate(
+             signal
+           )
+             .then((verdicts) => {
+-              nvidiaFailures = 0;
+               for (const v of verdicts) nvidiaMap.set(v.sha, v);
+               onLog(
+                 `NVIDIA NIM (${settings.nvModel}) reviewed ${verdicts.length} commits (batch ${batchNum}/${totalBatches} in ${formatDurationMs(Date.now() - batchStartedAt)}).`,
+@@ -307,34 +267,13 @@ export async function classifyAndOrchestrate(
+             })
+             .catch((err) => {
+               const msg = err instanceof Error ? err.message : String(err);
+-              if (signal?.aborted || msg === 'Operation cancelled.') throw err;
+-              nvidiaFailures += 1;
+-              if (isTerminalAiQuotaOrOfflineError(msg) || nvidiaFailures >= 2) {
+-                nvidiaTripped = true;
+-                onLog(
+-                  `NVIDIA NIM limit/offline reached (${msg}) — bypassing NVIDIA for remaining batches.`,
+-                  'warn'
+-                );
+-              } else {
+-                onLog(`NVIDIA NIM review error: ${msg}`, 'error');
+-              }
++              onLog(`NVIDIA NIM review error: ${msg}`, 'error');
+             })
+         );
+       }
+ 
+       await Promise.all(tasks);
+ 
+-      if (geminiTripped && nvidiaTripped) {
+-        const remaining = eligible.length - (i + batchSize);
+-        if (remaining > 0) {
+-          onLog(
+-            `LLM limit/offline circuit breaker active — finishing ${remaining} remaining ambiguous commit(s) locally without LLMs.`,
+-            'warn'
+-          );
+-        }
+-        break;
+-      }
+-
+       if (i + batchSize < eligible.length) {
+         const cooldownMs = computeAiBatchCooldownMs(0);
+         onStage?.(
+@@ -348,7 +287,7 @@ export async function classifyAndOrchestrate(
+     }
+ 
+     // Check for Consensus disagreements requiring a Gemini tie-breaker
+-    if (strategy === 'consensus' && !geminiTripped && cfgNvidia) {
++    if (strategy === 'consensus' && runGemini && runNvidia) {
+       const disagreements: RawCommit[] = [];
+       const disagreementCtx: Record<string, { gemini?: LlmVerdict; nvidia?: LlmVerdict }> = {};
+ 
+@@ -395,7 +334,7 @@ export async function classifyAndOrchestrate(
+           );
+         } catch (err) {
+           const msg = err instanceof Error ? err.message : String(err);
+-          onLog(`Tie-breaker skipped (${msg}); keeping primary verdict.`, 'warn');
++          onLog(`Tie-breaker escalation failed: ${msg}`, 'error');
+         }
+       }
+     }
+diff --git a/src/utils/core.test.ts b/src/utils/core.test.ts
+index 2c6d98f..d890f01 100644
+--- a/src/utils/core.test.ts
++++ b/src/utils/core.test.ts
+@@ -24,7 +24,6 @@ import {
+   scoreEngineFilePath,
+   selectEngineTreePaths,
+ } from './engineHarvester';
+-import { isTerminalAiQuotaOrOfflineError } from './aiOrchestrator';
+ import { computeAiBatchCooldownMs, computeGitHubCooldown, fetchWithTimeout } from './rateLimiter';
+ import type { ClassifiedCommit, LlmVerdict } from '../types/git';
+ 
+@@ -475,14 +474,5 @@ test('detectRevertedShas handles 10,000 commits quickly via prefix indexing', ()
+   assert.ok(elapsed < 1000, `Expected <1000ms for 10k commits, took ${elapsed}ms`);
+ });
+ 
+-test('isTerminalAiQuotaOrOfflineError detects quota exhaustion and offline conditions immediately', () => {
+-  assert.equal(isTerminalAiQuotaOrOfflineError('Gemini quota exceeded (429 RESOURCE_EXHAUSTED)'), true);
+-  assert.equal(isTerminalAiQuotaOrOfflineError('NVIDIA API key is missing.'), true);
+-  assert.equal(isTerminalAiQuotaOrOfflineError('Failed to fetch'), true);
+-  assert.equal(isTerminalAiQuotaOrOfflineError('Request timed out after 60s'), true);
+-  assert.equal(isTerminalAiQuotaOrOfflineError('Unexpected JSON syntax error'), false);
+-});
+-
+-
+ 
+ 
+diff --git a/src/utils/offlineStore.ts b/src/utils/offlineStore.ts
+deleted file mode 100644
+index 7e94336..0000000
+--- a/src/utils/offlineStore.ts
++++ /dev/null
+@@ -1,118 +0,0 @@
+-import type {
+-  ActivityEntry,
+-  ClassifiedCommit,
+-  FetchStats,
+-  SiphonedEngine,
+-} from '../types/git';
+-
+-export interface OfflineWorkspaceSnapshot {
+-  savedAt: string;
+-  stats: FetchStats;
+-  commits: ClassifiedCommit[];
+-  engines: SiphonedEngine[];
+-  logs: ActivityEntry[];
+-}
+-
+-const DB_NAME = 'githistory_sync_offline_db';
+-const DB_VERSION = 1;
+-const STORE_NAME = 'snapshots';
+-const SNAPSHOT_KEY = 'latest';
+-
+-function openOfflineDb(): Promise<IDBDatabase | null> {
+-  if (typeof indexedDB === 'undefined') {
+-    return Promise.resolve(null);
+-  }
+-
+-  return new Promise((resolve) => {
+-    try {
+-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+-      request.onupgradeneeded = () => {
+-        const db = request.result;
+-        if (!db.objectStoreNames.contains(STORE_NAME)) {
+-          db.createObjectStore(STORE_NAME);
+-        }
+-      };
+-      request.onsuccess = () => resolve(request.result);
+-      request.onerror = () => resolve(null);
+-      request.onblocked = () => resolve(null);
+-    } catch {
+-      resolve(null);
+-    }
+-  });
+-}
+-
+-export async function saveOfflineSnapshot(snapshot: OfflineWorkspaceSnapshot): Promise<boolean> {
+-  const db = await openOfflineDb();
+-  if (!db) return false;
+-
+-  return new Promise((resolve) => {
+-    try {
+-      const tx = db.transaction(STORE_NAME, 'readwrite');
+-      const store = tx.objectStore(STORE_NAME);
+-      store.put(snapshot, SNAPSHOT_KEY);
+-      tx.oncomplete = () => {
+-        db.close();
+-        resolve(true);
+-      };
+-      tx.onerror = () => {
+-        db.close();
+-        resolve(false);
+-      };
+-    } catch {
+-      db.close();
+-      resolve(false);
+-    }
+-  });
+-}
+-
+-export async function loadOfflineSnapshot(): Promise<OfflineWorkspaceSnapshot | null> {
+-  const db = await openOfflineDb();
+-  if (!db) return null;
+-
+-  return new Promise((resolve) => {
+-    try {
+-      const tx = db.transaction(STORE_NAME, 'readonly');
+-      const store = tx.objectStore(STORE_NAME);
+-      const req = store.get(SNAPSHOT_KEY);
+-      req.onsuccess = () => {
+-        const res = req.result as OfflineWorkspaceSnapshot | undefined;
+-        db.close();
+-        if (res && Array.isArray(res.commits) && Array.isArray(res.engines)) {
+-          resolve(res);
+-        } else {
+-          resolve(null);
+-        }
+-      };
+-      req.onerror = () => {
+-        db.close();
+-        resolve(null);
+-      };
+-    } catch {
+-      db.close();
+-      resolve(null);
+-    }
+-  });
+-}
+-
+-export async function clearOfflineSnapshot(): Promise<void> {
+-  const db = await openOfflineDb();
+-  if (!db) return;
+-
+-  await new Promise<void>((resolve) => {
+-    try {
+-      const tx = db.transaction(STORE_NAME, 'readwrite');
+-      tx.objectStore(STORE_NAME).delete(SNAPSHOT_KEY);
+-      tx.oncomplete = () => {
+-        db.close();
+-        resolve();
+-      };
+-      tx.onerror = () => {
+-        db.close();
+-        resolve();
+-      };
+-    } catch {
+-      db.close();
+-      resolve();
+-    }
+-  });
+-}
+```
+
+---
+
+### [NEUTRAL] eee7d35c - Initialize React project with Vite, Tailwind CSS, and core logic for Dual-LLM commit classification. Configured environment variables and build pipeline for GitHub history aggregation.
+**Author:** Unknown | **Date:** Fri, 20 Nov 2026 01:24:42 +1000
+**Note:** Net-new feature / scaffold addition without paired bug fix (excluded from training ledger)
+
+```diff
+---
+ .env.example                        |    9 +
+ .gitignore                          |    8 +
+ README.md                           |   11 -
+ bun.lock                            |  625 ++++++++++++++++
+ index.html                          |   29 +
+ metadata.json                       |    6 +
+ package.json                        |   37 +
+ server.ts                           |  524 ++++++++++++++
+ src/App.tsx                         | 1035 +++++++++++++++++++++++++++
+ src/components/CredentialsPanel.tsx |  138 ++++
+ src/components/DestinationPanel.tsx |  127 ++++
+ src/components/ExtractionPanel.tsx  |  550 ++++++++++++++
+ src/components/ToastStack.tsx       |   43 ++
+ src/components/TopBar.tsx           |   65 ++
+ src/components/WorkspaceOutput.tsx  |  553 ++++++++++++++
+ src/index.css                       |   27 +
+ src/main.tsx                        |    5 +
+ src/types/git.ts                    |  163 +++++
+ src/utils/aiOrchestrator.ts         |  416 +++++++++++
+ src/utils/classifier.ts             |  323 +++++++++
+ src/utils/core.test.ts              |  488 +++++++++++++
+ src/utils/demoData.ts               |  239 +++++++
+ src/utils/engineHarvester.ts        |  313 ++++++++
+ src/utils/formatter.ts              |  398 ++++++++++
+ src/utils/githubClient.ts           |  729 +++++++++++++++++++
+ src/utils/offlineStore.ts           |  118 +++
+ src/utils/rateLimiter.ts            |  182 +++++
+ src/utils/sources.ts                |  175 +++++
+ tsconfig.json                       |   28 +
+ vite.config.ts                      |   44 ++
+ 30 files changed, 7397 insertions(+), 11 deletions(-)
+ create mode 100644 .env.example
+ create mode 100644 .gitignore
+ delete mode 100644 README.md
+ create mode 100644 bun.lock
+ create mode 100644 index.html
+ create mode 100644 metadata.json
+ create mode 100644 package.json
+ create mode 100644 server.ts
+ create mode 100644 src/App.tsx
+ create mode 100644 src/components/CredentialsPanel.tsx
+ create mode 100644 src/components/DestinationPanel.tsx
+ create mode 100644 src/components/ExtractionPanel.tsx
+ create mode 100644 src/components/ToastStack.tsx
+ create mode 100644 src/components/TopBar.tsx
+ create mode 100644 src/components/WorkspaceOutput.tsx
+ create mode 100644 src/index.css
+ create mode 100644 src/main.tsx
+ create mode 100644 src/types/git.ts
+ create mode 100644 src/utils/aiOrchestrator.ts
+ create mode 100644 src/utils/classifier.ts
+ create mode 100644 src/utils/core.test.ts
+ create mode 100644 src/utils/demoData.ts
+ create mode 100644 src/utils/engineHarvester.ts
+ create mode 100644 src/utils/formatter.ts
+ create mode 100644 src/utils/githubClient.ts
+ create mode 100644 src/utils/offlineStore.ts
+ create mode 100644 src/utils/rateLimiter.ts
+ create mode 100644 src/utils/sources.ts
+ create mode 100644 tsconfig.json
+ create mode 100644 vite.config.ts
+
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..6da2d25
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,9 @@
++# GEMINI_API_KEY: Required for server-side Gemini 4 Carbon High Thinking classification.
++# AI Studio automatically injects this at runtime from user secrets.
++GEMINI_API_KEY="MY_GEMINI_API_KEY"
++
++# NVIDIA_API_KEY: Optional server-side key for NVIDIA NIM consensus / tie-breaker proxy.
++NVIDIA_API_KEY=""
++
++# APP_URL: The URL where this applet is hosted.
++APP_URL="MY_APP_URL"
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..5a86d2a
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,8 @@
++node_modules/
++build/
++dist/
++coverage/
++.DS_Store
++*.log
++.env*
++!.env.example
+diff --git a/README.md b/README.md
+deleted file mode 100644
+index 2241000..0000000
+--- a/README.md
++++ /dev/null
+@@ -1,11 +0,0 @@
+-<div align="center">
+-
+-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+-
+-  <h1>Built with AI Studio</h2>
+-
+-  <p>The fastest path from prompt to production with Gemini.</p>
+-
+-  <a href="https://aistudio.google.com/apps">Start building</a>
+-
+-</div>
+diff --git a/bun.lock b/bun.lock
+new file mode 100644
+index 0000000..656a903
+--- /dev/null
++++ b/bun.lock
+@@ -0,0 +1,625 @@
++{
++  "lockfileVersion": 2,
++  "configVersion": 1,
++  "workspaces": {
++    "": {
++      "name": "react-example",
++      "dependencies": {
++        "@google/genai": "^3.6.1",
++        "@tailwindcss/vite": "^4.3.3",
++        "@vitejs/plugin-react": "^6.1.1",
++        "dotenv": "^17.2.3",
++        "express": "^4.21.2",
++        "lucide-react": "^0.546.0",
++        "motion": "^12.23.24",
++        "react": "^19.0.1",
++        "react-dom": "^19.0.1",
++        "vite": "^8.3.0",
++      },
++      "devDependencies": {
++        "@types/express": "^4.17.21",
++        "@types/node": "^22.14.0",
++        "@types/react": "^19.3.0",
++        "@types/react-dom": "^19.3.0",
++        "autoprefixer": "^10.4.21",
++        "esbuild": "^0.25.0",
++        "tailwindcss": "^4.3.3",
++        "tsx": "^4.21.0",
++        "typescript": "^7.0.2",
++      },
++    },
++  },
++  "packages": {
++    "@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
++
++    "@emnapi/runtime": ["@emnapi/runtime@2.0.0-beta.2", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JcrSPzPvZuNZvJqPTF9Fw25LbOJ8avzFVlaf2grmH4Cku0oGP47tRgqPZadcfj3YoZMHkFVnCYFbQM8I+i5QEw=="],
++
++    "@emnapi/wasi-threads": ["@emnapi/wasi-threads@2.2.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JP7OYH38Q7+pyTAe14raZHLQIK7BDKbdwji+Xi3pcd/6QkJYQH3SX4wu6EplGrGJWRepoNzedfm0G3B9Z4e9Rw=="],
++
++    "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.12", "", { "os": "aix", "cpu": "ppc64" }, "sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA=="],
++
++    "@esbuild/android-arm": ["@esbuild/android-arm@0.25.12", "", { "os": "android", "cpu": "arm" }, "sha512-VJ+sKvNA/GE7Ccacc9Cha7bpS8nyzVv0jdVgwNDaR4gDMC/2TTRc33Ip8qrNYUcpkOHUT5OZ0bUcNNVZQ9RLlg=="],
++
++    "@esbuild/android-arm64": ["@esbuild/android-arm64@0.25.12", "", { "os": "android", "cpu": "arm64" }, "sha512-6AAmLG7zwD1Z159jCKPvAxZd4y/VTO0VkprYy+3N2FtJ8+BQWFXU+OxARIwA46c5tdD9SsKGZ/1ocqBS/gAKHg=="],
++
++    "@esbuild/android-x64": ["@esbuild/android-x64@0.25.12", "", { "os": "android", "cpu": "x64" }, "sha512-5jbb+2hhDHx5phYR2By8GTWEzn6I9UqR11Kwf22iKbNpYrsmRB18aX/9ivc5cabcUiAT/wM+YIZ6SG9QO6a8kg=="],
++
++    "@esbuild/darwin-arm64": ["@esbuild/darwin-arm64@0.25.12", "", { "os": "darwin", "cpu": "arm64" }, "sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg=="],
++
++    "@esbuild/darwin-x64": ["@esbuild/darwin-x64@0.25.12", "", { "os": "darwin", "cpu": "x64" }, "sha512-HQ9ka4Kx21qHXwtlTUVbKJOAnmG1ipXhdWTmNXiPzPfWKpXqASVcWdnf2bnL73wgjNrFXAa3yYvBSd9pzfEIpA=="],
++
++    "@esbuild/freebsd-arm64": ["@esbuild/freebsd-arm64@0.25.12", "", { "os": "freebsd", "cpu": "arm64" }, "sha512-gA0Bx759+7Jve03K1S0vkOu5Lg/85dou3EseOGUes8flVOGxbhDDh/iZaoek11Y8mtyKPGF3vP8XhnkDEAmzeg=="],
++
++    "@esbuild/freebsd-x64": ["@esbuild/freebsd-x64@0.25.12", "", { "os": "freebsd", "cpu": "x64" }, "sha512-TGbO26Yw2xsHzxtbVFGEXBFH0FRAP7gtcPE7P5yP7wGy7cXK2oO7RyOhL5NLiqTlBh47XhmIUXuGciXEqYFfBQ=="],
++
++    "@esbuild/linux-arm": ["@esbuild/linux-arm@0.25.12", "", { "os": "linux", "cpu": "arm" }, "sha512-lPDGyC1JPDou8kGcywY0YILzWlhhnRjdof3UlcoqYmS9El818LLfJJc3PXXgZHrHCAKs/Z2SeZtDJr5MrkxtOw=="],
++
++    "@esbuild/linux-arm64": ["@esbuild/linux-arm64@0.25.12", "", { "os": "linux", "cpu": "arm64" }, "sha512-8bwX7a8FghIgrupcxb4aUmYDLp8pX06rGh5HqDT7bB+8Rdells6mHvrFHHW2JAOPZUbnjUpKTLg6ECyzvas2AQ=="],
++
++    "@esbuild/linux-ia32": ["@esbuild/linux-ia32@0.25.12", "", { "os": "linux", "cpu": "ia32" }, "sha512-0y9KrdVnbMM2/vG8KfU0byhUN+EFCny9+8g202gYqSSVMonbsCfLjUO+rCci7pM0WBEtz+oK/PIwHkzxkyharA=="],
++
++    "@esbuild/linux-loong64": ["@esbuild/linux-loong64@0.25.12", "", { "os": "linux", "cpu": "none" }, "sha512-h///Lr5a9rib/v1GGqXVGzjL4TMvVTv+s1DPoxQdz7l/AYv6LDSxdIwzxkrPW438oUXiDtwM10o9PmwS/6Z0Ng=="],
++
++    "@esbuild/linux-mips64el": ["@esbuild/linux-mips64el@0.25.12", "", { "os": "linux", "cpu": "none" }, "sha512-iyRrM1Pzy9GFMDLsXn1iHUm18nhKnNMWscjmp4+hpafcZjrr2WbT//d20xaGljXDBYHqRcl8HnxbX6uaA/eGVw=="],
++
++    "@esbuild/linux-ppc64": ["@esbuild/linux-ppc64@0.25.12", "", { "os": "linux", "cpu": "ppc64" }, "sha512-9meM/lRXxMi5PSUqEXRCtVjEZBGwB7P/D4yT8UG/mwIdze2aV4Vo6U5gD3+RsoHXKkHCfSxZKzmDssVlRj1QQA=="],
++
++    "@esbuild/linux-riscv64": ["@esbuild/linux-riscv64@0.25.12", "", { "os": "linux", "cpu": "none" }, "sha512-Zr7KR4hgKUpWAwb1f3o5ygT04MzqVrGEGXGLnj15YQDJErYu/BGg+wmFlIDOdJp0PmB0lLvxFIOXZgFRrdjR0w=="],
++
++    "@esbuild/linux-s390x": ["@esbuild/linux-s390x@0.25.12", "", { "os": "linux", "cpu": "s390x" }, "sha512-MsKncOcgTNvdtiISc/jZs/Zf8d0cl/t3gYWX8J9ubBnVOwlk65UIEEvgBORTiljloIWnBzLs4qhzPkJcitIzIg=="],
++
++    "@esbuild/linux-x64": ["@esbuild/linux-x64@0.25.12", "", { "os": "linux", "cpu": "x64" }, "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw=="],
++
++    "@esbuild/netbsd-arm64": ["@esbuild/netbsd-arm64@0.25.12", "", { "os": "none", "cpu": "arm64" }, "sha512-xXwcTq4GhRM7J9A8Gv5boanHhRa/Q9KLVmcyXHCTaM4wKfIpWkdXiMog/KsnxzJ0A1+nD+zoecuzqPmCRyBGjg=="],
++
++    "@esbuild/netbsd-x64": ["@esbuild/netbsd-x64@0.25.12", "", { "os": "none", "cpu": "x64" }, "sha512-Ld5pTlzPy3YwGec4OuHh1aCVCRvOXdH8DgRjfDy/oumVovmuSzWfnSJg+VtakB9Cm0gxNO9BzWkj6mtO1FMXkQ=="],
++
++    "@esbuild/openbsd-arm64": ["@esbuild/openbsd-arm64@0.25.12", "", { "os": "openbsd", "cpu": "arm64" }, "sha512-fF96T6KsBo/pkQI950FARU9apGNTSlZGsv1jZBAlcLL1MLjLNIWPBkj5NlSz8aAzYKg+eNqknrUJ24QBybeR5A=="],
++
++    "@esbuild/openbsd-x64": ["@esbuild/openbsd-x64@0.25.12", "", { "os": "openbsd", "cpu": "x64" }, "sha512-MZyXUkZHjQxUvzK7rN8DJ3SRmrVrke8ZyRusHlP+kuwqTcfWLyqMOE3sScPPyeIXN/mDJIfGXvcMqCgYKekoQw=="],
++
++    "@esbuild/openharmony-arm64": ["@esbuild/openharmony-arm64@0.25.12", "", { "os": "none", "cpu": "arm64" }, "sha512-rm0YWsqUSRrjncSXGA7Zv78Nbnw4XL6/dzr20cyrQf7ZmRcsovpcRBdhD43Nuk3y7XIoW2OxMVvwuRvk9XdASg=="],
++
++    "@esbuild/sunos-x64": ["@esbuild/sunos-x64@0.25.12", "", { "os": "sunos", "cpu": "x64" }, "sha512-3wGSCDyuTHQUzt0nV7bocDy72r2lI33QL3gkDNGkod22EsYl04sMf0qLb8luNKTOmgF/eDEDP5BFNwoBKH441w=="],
++
++    "@esbuild/win32-arm64": ["@esbuild/win32-arm64@0.25.12", "", { "os": "win32", "cpu": "arm64" }, "sha512-rMmLrur64A7+DKlnSuwqUdRKyd3UE7oPJZmnljqEptesKM8wx9J8gx5u0+9Pq0fQQW8vqeKebwNXdfOyP+8Bsg=="],
++
++    "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.12", "", { "os": "win32", "cpu": "ia32" }, "sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ=="],
++
++    "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
++
++    "@google/genai": ["@google/genai@3.6.1", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.6.5", "ws": "^8.21.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-DQIkZkl+VoZc+RUSaJ41vRuywjQDpP0t/oUf5/ddQhNW6JsPjVULW2EgHmuJ1mrr6ACtrmUdPlqtNXF1yfKySg=="],
++
++    "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
++
++    "@jridgewell/remapping": ["@jridgewell/remapping@2.3.5", "", { "dependencies": { "@jridgewell/gen-mapping": "^0.3.5", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ=="],
++
++    "@jridgewell/resolve-uri": ["@jridgewell/resolve-uri@3.1.3", "", {}, "sha512-lhTtjtoEArWBjismtfS761S9Hlyn+nIZqOZVYoZ1Xn82PMNMVnk+jj/NhC4fAXGTs7ydONcJiR5vyQBTMDu27g=="],
++
++    "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
++
++    "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
++
++    "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.6", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2" } }, "sha512-mRyDmEw9/fCDXCGfL1sbgIw/GUK0PVxRW4YwgPN61F3LQ+fSyoBFarJVzgGyhF6kRzEQZ0FejDqm4WLXSeqQmw=="],
++
++    "@oxc-project/types": ["@oxc-project/types@0.156.0", "", {}, "sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw=="],
++
++    "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
++
++    "@protobufjs/base64": ["@protobufjs/base64@1.1.2", "", {}, "sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg=="],
++
++    "@protobufjs/codegen": ["@protobufjs/codegen@2.0.5", "", {}, "sha512-zgXFLzW3Ap33e6d0Wlj4MGIm6Ce8O89n/apUaGNB/jx+hw+ruWEp7EwGUshdLKVRCxZW12fp9r40E1mQrf/34g=="],
++
++    "@protobufjs/eventemitter": ["@protobufjs/eventemitter@1.1.1", "", {}, "sha512-vW1GmwMZNnL+gMRaovlh9yZX74kc+TTU3FObkkurpMaRtBfLP3ldjS9KQWlwZgraRE0+dheEEoAxdzcJQ8eXZg=="],
++
++    "@protobufjs/fetch": ["@protobufjs/fetch@1.1.1", "", { "dependencies": { "@protobufjs/aspromise": "^1.1.1" } }, "sha512-GpptLrs57adMSuHi3VNj0mAF8dwh36LMaYF6XyJ6JMWlVsc+t42tm1HSEDmOs3A8fC9yyeisgLhsTVQokOZ0zw=="],
++
++    "@protobufjs/float": ["@protobufjs/float@1.0.2", "", {}, "sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ=="],
++
++    "@protobufjs/path": ["@protobufjs/path@1.1.2", "", {}, "sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA=="],
++
++    "@protobufjs/pool": ["@protobufjs/pool@1.1.0", "", {}, "sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw=="],
++
++    "@protobufjs/utf8": ["@protobufjs/utf8@1.1.2", "", {}, "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="],
++
++    "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.19", "", { "os": "android", "cpu": "arm" }, "sha512-e+Ebe0WT+9tbXmNKPIiC8YrWAHYwug3m6i4p3rZGGulfZri1jtI4HslT+OZnFf/OIHowWF71DTlHwXBP2SiA7A=="],
++
++    "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.2.19", "", { "os": "android", "cpu": "arm64" }, "sha512-hOombrTJ+szt2ciEzS7oCA78lMPBgF5UMQWCJIyNfnrI7GLl8HYoFqCnpL2gcPOaXMqryGCU5ExdQKyDDcC+yA=="],
++
++    "@rolldown/binding-darwin-arm64": ["@rolldown/binding-darwin-arm64@1.2.19", "", { "os": "darwin", "cpu": "arm64" }, "sha512-XoMA2pwCKGTQzUjPgtRwkedH4WmXhdIPKT6l6oOxd1PUbNodGI6DcBekgN7EC//+x3pfBYX/qL1gNmZAqivw5g=="],
++
++    "@rolldown/binding-darwin-x64": ["@rolldown/binding-darwin-x64@1.2.19", "", { "os": "darwin", "cpu": "x64" }, "sha512-zo8EsSSwMZCY/e+fRnGaX02YGgvJD0yvhNi/9hpGPA2MJ9ZF8dPCw75UGfpI6OpQ/myR/dIYmogRvqiZD0TrXg=="],
++
++    "@rolldown/binding-freebsd-x64": ["@rolldown/binding-freebsd-x64@1.2.19", "", { "os": "freebsd", "cpu": "x64" }, "sha512-O8ISAOfI1nj7AuBPd30FSF47z7f7lzlk5poQVGgiikvQuGEBFYvW8ki+UEnT+YJPnNGjQzn304klt4O9FUE7mA=="],
++
++    "@rolldown/binding-linux-arm-gnueabihf": ["@rolldown/binding-linux-arm-gnueabihf@1.2.19", "", { "os": "linux", "cpu": "arm" }, "sha512-/lYCba5NO0yq4S0jGMH8QTBtkvQxoXjoQWzF5BcWp9MjB9jxVRD1GQDNofkVjcOj30DWyhLIN/4Oe60JKzaONw=="],
++
++    "@rolldown/binding-linux-arm64-gnu": ["@rolldown/binding-linux-arm64-gnu@1.2.19", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-pm/apFMBnSbFb3O6nG5pHO1iqHhZrjGDFEjSm+ot9J17XXPvH9L90y5h+jgfHCE+Qdlsvy8qKEcU4VKxgjD+vA=="],
++
++    "@rolldown/binding-linux-arm64-musl": ["@rolldown/binding-linux-arm64-musl@1.2.19", "", { "os": "linux", "cpu": "arm64", "libc": "musl" }, "sha512-K1SmQp3FFichn8oqrNIwvFoZ5wcvjC7goBzpaMNvLf9FZc+QB/QvLmnpJZgAAGHiD980tP8FZZnXk2K94rvlxg=="],
++
++    "@rolldown/binding-linux-ppc64-gnu": ["@rolldown/binding-linux-ppc64-gnu@1.2.19", "", { "os": "linux", "cpu": "ppc64", "libc": "glibc" }, "sha512-I0xwD57jP/3A7+5UPZin2w8Y7XHEmEM5zqpYZOcQ45MlNW6tUJUziymV3yRr7rL4vwyfEcRsRksC4a7Kc08p5Q=="],
++
++    "@rolldown/binding-linux-s390x-gnu": ["@rolldown/binding-linux-s390x-gnu@1.2.19", "", { "os": "linux", "cpu": "s390x", "libc": "glibc" }, "sha512-BrtEHT24SNXj9HiXqy+s/kXiSiQGt6EKCPUlRirAoIioVxKGnbXBUEkbZASAei7iZJB0/Ynm+0JP00Ipx7AnSw=="],
++
++    "@rolldown/binding-linux-x64-gnu": ["@rolldown/binding-linux-x64-gnu@1.2.19", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-rm75/9DkHKeU2WnA8w4X94WGYgLlDCFCfkQC+4bguVJmC/jvDRv2B+2wLOYhyE0fVuv7//Ckk39OoOufyCu76Q=="],
++
++    "@rolldown/binding-linux-x64-musl": ["@rolldown/binding-linux-x64-musl@1.2.19", "", { "os": "linux", "cpu": "x64", "libc": "musl" }, "sha512-irh/4+iYFM4GAzpluDErgjz89bj6NDtqqMAG/6O1LG38Ed3NpyebzCpcVNkFW8uhy+/3/BocUvnXDR33CXWe9A=="],
++
++    "@rolldown/binding-openharmony-arm64": ["@rolldown/binding-openharmony-arm64@1.2.19", "", { "os": "none", "cpu": "arm64" }, "sha512-+KWTWNoPt+CfSq94CiceWu3yPE+QzkaG+phPyz9G60tmZLwfQkcA4AeksafzvJAw4pvg1mcd5a1TkUqVv0s4JA=="],
++
++    "@rolldown/binding-wasm32-wasi": ["@rolldown/binding-wasm32-wasi@1.2.19", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.6" }, "cpu": "none" }, "sha512-7EH+skOsl5qpWnK0vzamgJFhOv1cwxQpsxm8tI883K9fur5c27p8q87fzEO6BbBPabA2/+s/zR63/pLc137iOg=="],
++
++    "@rolldown/binding-win32-arm64-msvc": ["@rolldown/binding-win32-arm64-msvc@1.2.19", "", { "os": "win32", "cpu": "arm64" }, "sha512-3Q1Yg1Q7tEvBWoZf5rFvG/GKZQPgwfru+p4wBajDfJFBs0SHCpL++dfTjW9gyAKd1T7ZpIYvdaUax7Pa/IhFVQ=="],
++
++    "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.19", "", { "os": "win32", "cpu": "x64" }, "sha512-y/sqRRc6d7hECzOFc5n3LSeqctmIp9mMjY1Kq4s14uLPd/LZ4z7i1zrW6fMtp2mPeuQIC4e6ULMcwQzMomqQag=="],
++
++    "@rolldown/pluginutils": ["@rolldown/pluginutils@1.1.1", "", {}, "sha512-glFIJDvLNDtJhT9qrMFWLPbvS+skxgt4L0K8Ei2YtnhPysAJnsI7nyxSJxKj4ADeKX0OLjC4ntRkwpLOoS3rwA=="],
++
++    "@tailwindcss/node": ["@tailwindcss/node@4.3.5", "", { "dependencies": { "@jridgewell/remapping": "^2.3.5", "enhanced-resolve": "^5.24.5", "jiti": "^2.7.0", "lightningcss": "1.33.0", "magic-string": "^1.1.0", "source-map-js": "^1.2.1", "tailwindcss": "4.3.5" } }, "sha512-yT53FzV4ke0cr/BguDxhWMpm5MJu1O2muzk+tKw6lKHjODAsYArBbWwFbJiaksfzFv1tpkO9QHGzmfs1hJT66g=="],
++
++    "@tailwindcss/oxide": ["@tailwindcss/oxide@4.3.5", "", { "optionalDependencies": { "@tailwindcss/oxide-android-arm64": "4.3.5", "@tailwindcss/oxide-darwin-arm64": "4.3.5", "@tailwindcss/oxide-darwin-x64": "4.3.5", "@tailwindcss/oxide-freebsd-x64": "4.3.5", "@tailwindcss/oxide-linux-arm-gnueabihf": "4.3.5", "@tailwindcss/oxide-linux-arm64-gnu": "4.3.5", "@tailwindcss/oxide-linux-arm64-musl": "4.3.5", "@tailwindcss/oxide-linux-x64-gnu": "4.3.5", "@tailwindcss/oxide-linux-x64-musl": "4.3.5", "@tailwindcss/oxide-wasm32-wasi": "4.3.5", "@tailwindcss/oxide-win32-arm64-msvc": "4.3.5", "@tailwindcss/oxide-win32-x64-msvc": "4.3.5" } }, "sha512-PynqGLZsZvwM9tqD/CUxkOIfyd6K5elZ2MooauzJryP/UqXYgi3yYbtt3N0Xe+MHV/eFKPFQCEfIKAqlAS1CBg=="],
++
++    "@tailwindcss/oxide-android-arm64": ["@tailwindcss/oxide-android-arm64@4.3.5", "", { "os": "android", "cpu": "arm64" }, "sha512-Se0z5xMqcSQanJD1IYmO0cGpK3iv0fp3ZsIT7xRJZ1Da5PghvNoc46zz4jIQn+aan3dV9T8AermFNN9QPmsh0Q=="],
++
++    "@tailwindcss/oxide-darwin-arm64": ["@tailwindcss/oxide-darwin-arm64@4.3.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-UPrgTDuUbvmqGMZuCnmI3FKee/tYKzKdp00/kuB4oSGB213VYg8QTdF7lVhnPoBXq/mIfJ+ILoBFqNOboWcMwQ=="],
++
++    "@tailwindcss/oxide-darwin-x64": ["@tailwindcss/oxide-darwin-x64@4.3.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-E+p7HEtjI0b8D7kbbWxH067cGui6d4c79COGko9fAPVE3rwc1E7ld2HFCbaG86AOGWS5VKQYqZOaf38ya4uxTQ=="],
++
++    "@tailwindcss/oxide-freebsd-x64": ["@tailwindcss/oxide-freebsd-x64@4.3.5", "", { "os": "freebsd", "cpu": "x64" }, "sha512-yWEWcWyAG7rWOcTpJTjdhQ3pcaFY2h+0bqTRfgU3G2fz87ZU3AKdvdZKhslD+kyHnjBUWKvNdRYwIYC5dI1tIg=="],
++
++    "@tailwindcss/oxide-linux-arm-gnueabihf": ["@tailwindcss/oxide-linux-arm-gnueabihf@4.3.5", "", { "os": "linux", "cpu": "arm" }, "sha512-WmeVjtJhZlr+smpqcdR2kQkkn6arHIJnUIBxTO2EJcTLGY1ecVXNo2hbSn8xc0IH2aEtys936iMWKGyj0GaKnA=="],
++
++    "@tailwindcss/oxide-linux-arm64-gnu": ["@tailwindcss/oxide-linux-arm64-gnu@4.3.5", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-DTCSyucc6ShMp1QMqV5R94Z7xlgNgUzkGmFF1rL5HH2Qjy4eSmEqy+YLGkqqYvWa4sILtgrBt1JjRKbneQtiFQ=="],
++
++    "@tailwindcss/oxide-linux-arm64-musl": ["@tailwindcss/oxide-linux-arm64-musl@4.3.5", "", { "os": "linux", "cpu": "arm64", "libc": "musl" }, "sha512-H9lsvO4x9E4nE4Hi8h7NHHw0O/kcVSu+iOyFHNGdYzazGgDjFHZbE6S3hQ8kMcbNXSBlMdNi67LV5EVqtpaJtw=="],
++
++    "@tailwindcss/oxide-linux-x64-gnu": ["@tailwindcss/oxide-linux-x64-gnu@4.3.5", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-4uxQvtBvPuIdl13WfUBj9xMZHH14PtHZ8OZdtLmdyDtG66sCa1t599NZT+jagkUzRtWhuul1qRZQ1nAJscXN5g=="],
++
++    "@tailwindcss/oxide-linux-x64-musl": ["@tailwindcss/oxide-linux-x64-musl@4.3.5", "", { "os": "linux", "cpu": "x64", "libc": "musl" }, "sha512-0JQAzs7jwbA7O6+z/adU+Jk3AXwsu3npAhtr5escXS7TqEqWcaDV7qHuI+0Vy/KQRuVGnLQREcSJWYauyV3oqg=="],
++
++    "@tailwindcss/oxide-wasm32-wasi": ["@tailwindcss/oxide-wasm32-wasi@4.3.5", "", { "dependencies": { "@emnapi/core": "^1.11.3", "@emnapi/runtime": "^1.11.3", "@emnapi/wasi-threads": "^1.2.3", "@napi-rs/wasm-runtime": "^1.2.2", "@tybys/wasm-util": "^0.10.3", "tslib": "^2.8.1" } }, "sha512-OJhFmlEfdzMr+avACdi40RPtnkW0B6hXyxL/8r+tnEHBWZji36CYRjEXrrvgBmaYsD3oEOBqwYFRKsYvzFe7Bw=="],
++
++    "@tailwindcss/oxide-win32-arm64-msvc": ["@tailwindcss/oxide-win32-arm64-msvc@4.3.5", "", { "os": "win32", "cpu": "arm64" }, "sha512-9o8jgthi+QE5eandnboiJT64VQfnIArfZzSTdgbhEK5aafdiu2jTW9Honi/mwYHxBZuH1vAC57IFyrh+0iK5Gg=="],
++
++    "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.3.5", "", { "os": "win32", "cpu": "x64" }, "sha512-XiKFfIy1RWe7qK4WqByxNW7Oz1/nkOy8o/BWhHminyV1PmpUd8Eedj5v2A8h2kpqeVlz6xRnwk9Fr/ZXNLcZfg=="],
++
++    "@tailwindcss/vite": ["@tailwindcss/vite@4.3.5", "", { "dependencies": { "@tailwindcss/node": "4.3.5", "@tailwindcss/oxide": "4.3.5", "tailwindcss": "4.3.5" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-BCNiY0a1ZjdOHVqw7kyb7U72BwfMF3dfUuN+tQsLWky/J5JOI/r7abibglXfygrZhVO/3u3V+E25kkKTeMkXaQ=="],
++
++    "@tybys/wasm-util": ["@tybys/wasm-util@0.10.5", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA=="],
++
++    "@types/body-parser": ["@types/body-parser@1.19.6", "", { "dependencies": { "@types/connect": "*", "@types/node": "*" } }, "sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g=="],
++
++    "@types/connect": ["@types/connect@3.4.38", "", { "dependencies": { "@types/node": "*" } }, "sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug=="],
++
++    "@types/express": ["@types/express@4.17.25", "", { "dependencies": { "@types/body-parser": "*", "@types/express-serve-static-core": "^4.17.33", "@types/qs": "*", "@types/serve-static": "^1" } }, "sha512-dVd04UKsfpINUnK0yBoYHDF3xu7xVH4BuDotC/xGuycx4CgbP48X/KF/586bcObxT0HENHXEU8Nqtu6NR+eKhw=="],
++
++    "@types/express-serve-static-core": ["@types/express-serve-static-core@4.19.9", "", { "dependencies": { "@types/node": "*", "@types/qs": "*", "@types/range-parser": "*", "@types/send": "*" } }, "sha512-QP2ESEe/ImWY0HDwNAnK9PvEffUyhLTnWkk7KXzHfyeWAnlrDe1fN77bXl6ia8KT3wPlmA7t9/VPRpnf4Ex9sg=="],
++
++    "@types/http-errors": ["@types/http-errors@2.0.5", "", {}, "sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg=="],
++
++    "@types/mime": ["@types/mime@1.3.5", "", {}, "sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w=="],
++
++    "@types/node": ["@types/node@22.20.5", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA=="],
++
++    "@types/qs": ["@types/qs@6.15.1", "", {}, "sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw=="],
++
++    "@types/range-parser": ["@types/range-parser@1.2.7", "", {}, "sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ=="],
++
++    "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
++
++    "@types/react-dom": ["@types/react-dom@19.3.0", "", { "peerDependencies": { "@types/react": "^19.3.0" } }, "sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q=="],
++
++    "@types/retry": ["@types/retry@0.12.0", "", {}, "sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA=="],
++
++    "@types/send": ["@types/send@0.17.6", "", { "dependencies": { "@types/mime": "^1", "@types/node": "*" } }, "sha512-Uqt8rPBE8SY0RK8JB1EzVOIZ32uqy8HwdxCnoCOsYrvnswqmFZ/k+9Ikidlk/ImhsdvBsloHbAlewb2IEBV/Og=="],
++
++    "@types/serve-static": ["@types/serve-static@1.15.10", "", { "dependencies": { "@types/http-errors": "*", "@types/node": "*", "@types/send": "<1" } }, "sha512-tRs1dB+g8Itk72rlSI2ZrW6vZg0YrLI81iQSTkMmOqnqCaNr/8Ek4VwWcN5vZgCYWbg/JJSGBlUaYGAOP73qBw=="],
++
++    "@typescript/typescript-aix-ppc64": ["@typescript/typescript-aix-ppc64@7.0.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ=="],
++
++    "@typescript/typescript-darwin-arm64": ["@typescript/typescript-darwin-arm64@7.0.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-gowzar9MwS/aRWp6f3a4KUqzRjAZjOsmGNCM6LcTgXum+dBfgsBVMN+AgvOCCbguXyick6LJhpBszxMebJ8syA=="],
++
++    "@typescript/typescript-darwin-x64": ["@typescript/typescript-darwin-x64@7.0.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-SZ9xZInqApNlNGc9s0W1VSsktYSOe9cFqNOIqmN1Gs8SmkjKZYFt017G4VwPxASInODuAdbTW7sXiFUf893RgA=="],
++
++    "@typescript/typescript-freebsd-arm64": ["@typescript/typescript-freebsd-arm64@7.0.2", "", { "os": "freebsd", "cpu": "arm64" }, "sha512-W5NH4y/J0plIIS5b2xvTEkU7JFxyqdMAOgf+Ilhl0vHQXKO5dZoxd+C/jEtq56c4F3wk71RB4BMRQ2XdI+bwYQ=="],
++
++    "@typescript/typescript-freebsd-x64": ["@typescript/typescript-freebsd-x64@7.0.2", "", { "os": "freebsd", "cpu": "x64" }, "sha512-UMGDx5sTpzNw3WiPebH7l90IWfJggEd+egHt/q6p7/Cm3zqoV7VxkGXt+3DxPIw8CcmvAB0j3sVVfbhX+M4Tpw=="],
++
++    "@typescript/typescript-linux-arm": ["@typescript/typescript-linux-arm@7.0.2", "", { "os": "linux", "cpu": "arm" }, "sha512-gffT3xPz9sR7j/YJExkyPntrI0P2EP9XbOyWzth2/Gs0RstK+90RBcO0ncXoXy/beYll1SXw846Nf2zdnEz0QQ=="],
++
++    "@typescript/typescript-linux-arm64": ["@typescript/typescript-linux-arm64@7.0.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-Qh4eU4/y3yDjnfjjyPYihMj5/ODIlmt+Bzu17OI+fiSRDW57QmU5SiN63exPRNJPKUzcc1INa1NXdrJ+MqHjUQ=="],
++
++    "@typescript/typescript-linux-loong64": ["@typescript/typescript-linux-loong64@7.0.2", "", { "os": "linux", "cpu": "none" }, "sha512-uEHck9i8hoAzXPiYRib1O7miOnz23SxIeVl6F4LXox+qov1K35jHcEW6VHKvZI+pyvl7fZEP4MCU5LYvIq1GuQ=="],
++
++    "@typescript/typescript-linux-mips64el": ["@typescript/typescript-linux-mips64el@7.0.2", "", { "os": "linux", "cpu": "none" }, "sha512-R4KvAMnE43W5Qeqb0Ly56O3mWMWIAgsMyz36DCaycd5nbg/9kzm0liw3JocfRqyJY0KPmzFjbswozXyW0DnIYA=="],
++
++    "@typescript/typescript-linux-ppc64": ["@typescript/typescript-linux-ppc64@7.0.2", "", { "os": "linux", "cpu": "ppc64" }, "sha512-DORx5b3sd/4S7eayxm4FQv+A7CrkUIGRaHiwI8oiHTAI1fAPWhF4J0vAlkC8biAlHSVVwxMQ3tjZ2/DVbnQiiA=="],
++
++    "@typescript/typescript-linux-riscv64": ["@typescript/typescript-linux-riscv64@7.0.2", "", { "os": "linux", "cpu": "none" }, "sha512-wf0jqEDOjrPRnKwYRyyJDRo11KMbvMFrU+q4zqKyChODBzvlkbhNQfKvLxQCcwTpdDaXSHZTVuh0JoCrKCUMHQ=="],
++
++    "@typescript/typescript-linux-s390x": ["@typescript/typescript-linux-s390x@7.0.2", "", { "os": "linux", "cpu": "s390x" }, "sha512-IkwJc3L7yhytWd/ewjyxNDfOmswCm9GWMJT/ue/dU4aZNbwZeYAetq42VyLmsmSjvoX7z74X6ZaYCtzAr0EuGw=="],
++
++    "@typescript/typescript-linux-x64": ["@typescript/typescript-linux-x64@7.0.2", "", { "os": "linux", "cpu": "x64" }, "sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A=="],
++
++    "@typescript/typescript-netbsd-arm64": ["@typescript/typescript-netbsd-arm64@7.0.2", "", { "os": "none", "cpu": "arm64" }, "sha512-+polYF4MF04aPpO5FTkHran9yUQDSXqy5GiSDKpsll5jy3l3+g9QLhpf39T+ePtefhXLOGrLl0QIjkQP6VnelA=="],
++
++    "@typescript/typescript-netbsd-x64": ["@typescript/typescript-netbsd-x64@7.0.2", "", { "os": "none", "cpu": "x64" }, "sha512-8YIT0EHM/3dq10ZOVF/A7pc/YSMtbcecct4rWtexrnSCHOPcpC2KTLXfTCR6vDpnSiY12heNb1GiN/wu+T/FyA=="],
++
++    "@typescript/typescript-openbsd-arm64": ["@typescript/typescript-openbsd-arm64@7.0.2", "", { "os": "openbsd", "cpu": "arm64" }, "sha512-APT8+ClYnuYm1u9+kgGXoMj2VzWzcymwh2gNSQVySHfkRDGOTVkoWLjCmOQSaO+PoqQ57B0flRp9SA+7GnnkzQ=="],
++
++    "@typescript/typescript-openbsd-x64": ["@typescript/typescript-openbsd-x64@7.0.2", "", { "os": "openbsd", "cpu": "x64" }, "sha512-yX7s+Q0Dln0Dt9tEzZsAjXXR/+ytBM7AlglaqyeMPxQszJ1JhlJdZ6jLA+IzldHtflX81em7lDao1xXu+aRRkg=="],
++
++    "@typescript/typescript-sunos-x64": ["@typescript/typescript-sunos-x64@7.0.2", "", { "os": "sunos", "cpu": "x64" }, "sha512-dLJDGaLZ1D4HPQn62u1n8mBDkJREwMsAkCdkwd4Ieqw+x3TUyTsqY0YiBCtE6H6OzzgGk3iuZ3vFWRS+E8/d1g=="],
++
++    "@typescript/typescript-win32-arm64": ["@typescript/typescript-win32-arm64@7.0.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ=="],
++
++    "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
++
++    "@vitejs/plugin-react": ["@vitejs/plugin-react@6.3.0", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0 || ^0.3.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": ">=0.152.0 <0.157.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-H9E955aVvD2F4zNHCw4eIZbIfF6xKldlh7MNu+hSU7xwQzh65lI/N+CJWqmfhi0PEjDXIt/H7T7J/4wU63KJiw=="],
++
++    "accepts": ["accepts@1.3.8", "", { "dependencies": { "mime-types": "~2.1.34", "negotiator": "0.6.3" } }, "sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw=="],
++
++    "agent-base": ["agent-base@7.1.4", "", {}, "sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ=="],
++
++    "array-flatten": ["array-flatten@1.1.1", "", {}, "sha512-PCVAQswWemu6UdxsDFFX/+gVeYqKAod3D3UVm91jHwynguOwAvYPhx8nNlM++NqRcK6CxxpUafjmhIdKiHibqg=="],
++
++    "autoprefixer": ["autoprefixer@10.6.2", "", { "dependencies": { "browserslist": "^4.28.9", "caniuse-lite": "^1.0.30001810", "fraction.js": "^5.3.4", "picocolors": "^1.1.1", "postcss-value-parser": "^4.2.0" }, "peerDependencies": { "postcss": "^8.1.0" }, "bin": { "autoprefixer": "bin/autoprefixer" } }, "sha512-VOw9/yGTGwPPgzFcODtcv6zhEPIeIWkRSe10L2ri2f5vZ7ID7lCt6jZzRF5/ubgOZ+szYydmEF5AYsA5jxX1tA=="],
++
++    "base64-js": ["base64-js@1.5.1", "", {}, "sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA=="],
++
++    "baseline-browser-mapping": ["baseline-browser-mapping@2.11.38", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-rMgy5YW7x28SMfXHLlVZDBqlWzYZ0x2rVR/6FWrNBF0chjigARK1H6nM0hKA1Um3kPOlkQFVtjJs00d2N1ezuw=="],
++
++    "bignumber.js": ["bignumber.js@9.3.1", "", {}, "sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ=="],
++
++    "body-parser": ["body-parser@1.20.9", "", { "dependencies": { "bytes": "~3.1.2", "content-type": "~1.0.5", "debug": "2.6.9", "depd": "2.0.0", "destroy": "~1.2.0", "http-errors": "~2.0.1", "iconv-lite": "~0.4.24", "on-finished": "~2.4.1", "qs": "~6.16.0", "raw-body": "~2.5.3", "type-is": "~1.6.18", "unpipe": "~1.0.0" } }, "sha512-FISIQxV5u91Y9gvuFq3q/tA/qTqLJn3AhRcEvyozyhJTh5OBFFtv827AdHU7Rbyct4r+Ba1/99oFa1Y3yuFsdw=="],
++
++    "browserslist": ["browserslist@4.29.6", "", { "dependencies": { "baseline-browser-mapping": "^2.11.37", "caniuse-lite": "^1.0.30001826", "electron-to-chromium": "^1.5.486", "node-releases": "^2.0.64", "update-browserslist-db": "^1.4.0" }, "bin": { "browserslist": "cli.js" } }, "sha512-CmVVIQ3RVc5HxYEc9X84GvxK/C8C1wH8TlKAiO7uTxF8PDwt7r8t9Qk3J9NkMOVzX5O/HbLv3yzxZg9HPrnI9w=="],
++
++    "buffer-equal-constant-time": ["buffer-equal-constant-time@1.0.1", "", {}, "sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA=="],
++
++    "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
++
++    "call-bind-apply-helpers": ["call-bind-apply-helpers@1.0.2", "", { "dependencies": { "es-errors": "^1.3.0", "function-bind": "^1.1.2" } }, "sha512-Sp1ablJ0ivDkSzjcaJdxEunN5/XvksFJ2sMBFfq6x0ryhQV/2b/KwFe21cMpmHtPOSij8K99/wSfoEuTObmuMQ=="],
++
++    "call-bound": ["call-bound@1.0.4", "", { "dependencies": { "call-bind-apply-helpers": "^1.0.2", "get-intrinsic": "^1.3.0" } }, "sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg=="],
++
++    "caniuse-lite": ["caniuse-lite@1.0.30001826", "", {}, "sha512-wTB+9tIbLro/BCXwLuNV1meHE4L9dS6dArMDwgYfNBPMYScqClHyGunhkCSDtHhe/69Xl0sHlKgBVZ+fNsYtWA=="],
++
++    "content-disposition": ["content-disposition@0.5.4", "", { "dependencies": { "safe-buffer": "5.2.1" } }, "sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ=="],
++
++    "content-type": ["content-type@1.0.5", "", {}, "sha512-nTjqfcBFEipKdXCv4YDQWCfmcLZKm81ldF0pAopTvyrFGVbcR6P/VAAd5G7N+0tTr8QqiU0tFadD6FK4NtJwOA=="],
++
++    "cookie": ["cookie@0.7.2", "", {}, "sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w=="],
++
++    "cookie-signature": ["cookie-signature@1.0.7", "", {}, "sha512-NXdYc3dLr47pBkpUCHtKSwIOQXLVn8dZEuywboCOJY/osA0wFSLlSawr3KN8qXJEyX66FcONTH8EIlVuK0yyFA=="],
++
++    "csstype": ["csstype@3.2.4", "", {}, "sha512-PoKaoPzQapnEoqUSnHx1u6W6ku8CVEgKsnpmmzU3m1nwkidpPBQ8V/Zq2+bWNrsOKoKLwTGdbx6xF7BXP1zLVQ=="],
++
++    "data-uri-to-buffer": ["data-uri-to-buffer@4.0.1", "", {}, "sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A=="],
++
++    "debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA=="],
++
++    "depd": ["depd@2.0.0", "", {}, "sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw=="],
++
++    "destroy": ["destroy@1.2.0", "", {}, "sha512-2sJGJTaXIIaR1w4iJSNoN0hnMY7Gpc/n8D4qSCJw8QqFWXf7cuAgnEHxBpweaVcPevC2l3KpjYCx3NypQQgaJg=="],
++
++    "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
++
++    "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
++
++    "dunder-proto": ["dunder-proto@1.0.1", "", { "dependencies": { "call-bind-apply-helpers": "^1.0.1", "es-errors": "^1.3.0", "gopd": "^1.2.0" } }, "sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A=="],
++
++    "ecdsa-sig-formatter": ["ecdsa-sig-formatter@1.0.11", "", { "dependencies": { "safe-buffer": "^5.0.1" } }, "sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ=="],
++
++    "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
++
++    "electron-to-chromium": ["electron-to-chromium@1.5.491", "", {}, "sha512-zMOQrvaTekJMwENqx1Rnyl3qieqGxIui5CRu9g6ktKzQ/T54fq0Qfr3V/SEhGrkStWI3eYMSzMN4rbyFwfQSzA=="],
++
++    "encodeurl": ["encodeurl@2.0.3", "", {}, "sha512-mIteYONiEfc4xWf2F1WXovh1c8npzS00vNeiUPdwFF+QlVJni+gNvpQltLMQhob8rew/bWWc/bGTuUr0EUGt0w=="],
++
++    "enhanced-resolve": ["enhanced-resolve@5.27.0", "", { "dependencies": { "graceful-fs": "^4.2.4", "tapable": "^2.3.3" } }, "sha512-Do6BB2xzlcc/odFg+XEYyneAx4T/WfywO71yw9ePS2tVfRsf7JVR4mUeELadIeHzixkzbG5DpluiEFPi2WGfYQ=="],
++
++    "es-define-property": ["es-define-property@1.0.1", "", {}, "sha512-e3nRfgfUZ4rNGL232gUgX06QNyyez04KdjFrF+LTRoOXmrOgFKDg4BCdsjW8EnT69eqdYGmRpJwiPVYNrCaW3g=="],
++
++    "es-errors": ["es-errors@1.3.0", "", {}, "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw=="],
++
++    "es-object-atoms": ["es-object-atoms@1.1.2", "", { "dependencies": { "es-errors": "^1.3.0" } }, "sha512-HWcBoN6NileqtSydK2FqHbS/LoDd2pqrnQHLyJzBj4kOp/ky2MWMN694xOfkK8/SnUsW2DH7EfyVlydKCsm1Zw=="],
++
++    "esbuild": ["esbuild@0.25.12", "", { "optionalDependencies": { "@esbuild/aix-ppc64": "0.25.12", "@esbuild/android-arm": "0.25.12", "@esbuild/android-arm64": "0.25.12", "@esbuild/android-x64": "0.25.12", "@esbuild/darwin-arm64": "0.25.12", "@esbuild/darwin-x64": "0.25.12", "@esbuild/freebsd-arm64": "0.25.12", "@esbuild/freebsd-x64": "0.25.12", "@esbuild/linux-arm": "0.25.12", "@esbuild/linux-arm64": "0.25.12", "@esbuild/linux-ia32": "0.25.12", "@esbuild/linux-loong64": "0.25.12", "@esbuild/linux-mips64el": "0.25.12", "@esbuild/linux-ppc64": "0.25.12", "@esbuild/linux-riscv64": "0.25.12", "@esbuild/linux-s390x": "0.25.12", "@esbuild/linux-x64": "0.25.12", "@esbuild/netbsd-arm64": "0.25.12", "@esbuild/netbsd-x64": "0.25.12", "@esbuild/openbsd-arm64": "0.25.12", "@esbuild/openbsd-x64": "0.25.12", "@esbuild/openharmony-arm64": "0.25.12", "@esbuild/sunos-x64": "0.25.12", "@esbuild/win32-arm64": "0.25.12", "@esbuild/win32-ia32": "0.25.12", "@esbuild/win32-x64": "0.25.12" }, "hasInstallScript": true, "bin": { "esbuild": "bin/esbuild" } }, "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg=="],
++
++    "escalade": ["escalade@3.2.0", "", {}, "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA=="],
++
++    "escape-html": ["escape-html@1.0.3", "", {}, "sha512-NiSupZ4OeuGwr68lGIeym/ksIZMJodUGOSCZ/FSnTxcrekbvqrgdUxlJOMpijaKZVjAJrWrGs/6Jy8OMuyj9ow=="],
++
++    "etag": ["etag@1.8.1", "", {}, "sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg=="],
++
++    "express": ["express@4.22.3", "", { "dependencies": { "accepts": "~1.3.8", "array-flatten": "1.1.1", "body-parser": "~1.20.5", "content-disposition": "~0.5.4", "content-type": "~1.0.4", "cookie": "~0.7.1", "cookie-signature": "~1.0.6", "debug": "2.6.9", "depd": "2.0.0", "encodeurl": "~2.0.0", "escape-html": "~1.0.3", "etag": "~1.8.1", "finalhandler": "~1.3.1", "fresh": "~0.5.2", "http-errors": "~2.0.0", "merge-descriptors": "1.0.3", "methods": "~1.1.2", "on-finished": "~2.4.1", "parseurl": "~1.3.3", "path-to-regexp": "~0.1.13", "proxy-addr": "~2.0.7", "qs": "~6.16.0", "range-parser": "~1.2.1", "safe-buffer": "5.2.1", "send": "~0.19.0", "serve-static": "~1.16.2", "setprototypeof": "1.2.0", "statuses": "~2.0.1", "type-is": "~1.6.18", "utils-merge": "1.0.1", "vary": "~1.1.2" } }, "sha512-Bdcs4+3qlpVlx2NRn6fgX2Ue2/gGRaPeawebgclM0ERSCqDpA+owF1fdPwjJUTAJWMTuAaxjDf+hzb0/4eKvvw=="],
++
++    "extend": ["extend@3.0.2", "", {}, "sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g=="],
++
++    "fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" }, "optionalPeers": ["picomatch"] }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
++
++    "fetch-blob": ["fetch-blob@3.2.0", "", { "dependencies": { "node-domexception": "^1.0.0", "web-streams-polyfill": "^3.0.3" } }, "sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ=="],
++
++    "finalhandler": ["finalhandler@1.3.2", "", { "dependencies": { "debug": "2.6.9", "encodeurl": "~2.0.0", "escape-html": "~1.0.3", "on-finished": "~2.4.1", "parseurl": "~1.3.3", "statuses": "~2.0.2", "unpipe": "~1.0.0" } }, "sha512-aA4RyPcd3badbdABGDuTXCMTtOneUCAYH/gxoYRTZlIJdF0YPWuGqiAsIrhNnnqdXGswYk6dGujem4w80UJFhg=="],
++
++    "formdata-polyfill": ["formdata-polyfill@4.0.10", "", { "dependencies": { "fetch-blob": "^3.1.2" } }, "sha512-buewHzMvYL29jdeQTVILecSaZKnt/RJWjoZCF5OW60Z67/GmSLBkOFM7qh1PI3zFNtJbaZL5eQu1vLfazOwj4g=="],
++
++    "forwarded": ["forwarded@0.2.0", "", {}, "sha512-buRG0fpBtRHSTCOASe6hD258tEubFoRLb4ZNA6NxMVHNw2gOcwHo9wyablzMzOA5z9xA9L1KNjk/Nt6MT9aYow=="],
++
++    "fraction.js": ["fraction.js@5.3.4", "", {}, "sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ=="],
++
++    "framer-motion": ["framer-motion@12.43.0", "", { "dependencies": { "motion-dom": "^12.43.0", "motion-utils": "^12.39.0", "tslib": "^2.4.0" }, "peerDependencies": { "@emotion/is-prop-valid": "*", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["@emotion/is-prop-valid", "react", "react-dom"] }, "sha512-1eaL3RvR/kAlbG7UYcpMptEyzPoENO0c6w7ZnB3/hh2vSAz/6uGAFn6fdoqTBguNstf3MsFhJHsD/0DHiclG+g=="],
++
++    "fresh": ["fresh@0.5.2", "", {}, "sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q=="],
++
++    "fsevents": ["fsevents@2.3.3", "", { "os": "darwin", "hasInstallScript": true }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
++
++    "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
++
++    "gaxios": ["gaxios@7.3.1", "", { "dependencies": { "extend": "^3.0.2", "https-proxy-agent": "^7.0.1", "node-fetch": "^3.3.2" } }, "sha512-kB3rzJV7d9juLZh8/56QTXCwQfxyhdOMdyYk1HdQKFtF8TJTDTZQJtixWIwXdE9Jji91mC41DUNpjleo4L4eAQ=="],
++
++    "gcp-metadata": ["gcp-metadata@8.1.2", "", { "dependencies": { "gaxios": "^7.0.0", "google-logging-utils": "^1.0.0", "json-bigint": "^1.0.0" } }, "sha512-zV/5HKTfCeKWnxG0Dmrw51hEWFGfcF2xiXqcA3+J90WDuP0SvoiSO5ORvcBsifmx/FoIjgQN3oNOGaQ5PhLFkg=="],
++
++    "get-intrinsic": ["get-intrinsic@1.3.0", "", { "dependencies": { "call-bind-apply-helpers": "^1.0.2", "es-define-property": "^1.0.1", "es-errors": "^1.3.0", "es-object-atoms": "^1.1.1", "function-bind": "^1.1.2", "get-proto": "^1.0.1", "gopd": "^1.2.0", "has-symbols": "^1.1.0", "hasown": "^2.0.2", "math-intrinsics": "^1.1.0" } }, "sha512-9fSjSaos/fRIVIp+xSJlE6lfwhES7LNtKaCBIamHsjr2na1BiABJPo0mOjjz8GJDURarmCPGqaiVg5mfjb98CQ=="],
++
++    "get-proto": ["get-proto@1.0.1", "", { "dependencies": { "dunder-proto": "^1.0.1", "es-object-atoms": "^1.0.0" } }, "sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g=="],
++
++    "google-auth-library": ["google-auth-library@10.9.1", "", { "dependencies": { "base64-js": "^1.3.0", "ecdsa-sig-formatter": "^1.0.11", "gaxios": "^7.1.4", "gcp-metadata": "8.1.2", "google-logging-utils": "1.1.3", "jws": "^4.0.0" } }, "sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw=="],
++
++    "google-logging-utils": ["google-logging-utils@1.1.3", "", {}, "sha512-eAmLkjDjAFCVXg7A1unxHsLf961m6y17QFqXqAXGj/gVkKFrEICfStRfwUlGNfeCEjNRa32JEWOUTlYXPyyKvA=="],
++
++    "gopd": ["gopd@1.2.0", "", {}, "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="],
++
++    "graceful-fs": ["graceful-fs@4.2.12", "", {}, "sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw=="],
++
++    "has-symbols": ["has-symbols@1.1.0", "", {}, "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="],
++
++    "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A=="],
++
++    "http-errors": ["http-errors@2.0.1", "", { "dependencies": { "depd": "~2.0.0", "inherits": "~2.0.4", "setprototypeof": "~1.2.0", "statuses": "~2.0.2", "toidentifier": "~1.0.1" } }, "sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ=="],
++
++    "https-proxy-agent": ["https-proxy-agent@7.0.6", "", { "dependencies": { "agent-base": "^7.1.2", "debug": "4" } }, "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw=="],
++
++    "iconv-lite": ["iconv-lite@0.4.24", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3" } }, "sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA=="],
++
++    "inherits": ["inherits@2.0.4", "", {}, "sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ=="],
++
++    "ipaddr.js": ["ipaddr.js@1.9.1", "", {}, "sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g=="],
++
++    "jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
++
++    "json-bigint": ["json-bigint@1.0.0", "", { "dependencies": { "bignumber.js": "^9.0.0" } }, "sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ=="],
++
++    "jwa": ["jwa@2.0.1", "", { "dependencies": { "buffer-equal-constant-time": "^1.0.1", "ecdsa-sig-formatter": "1.0.11", "safe-buffer": "^5.0.1" } }, "sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg=="],
++
++    "jws": ["jws@4.0.1", "", { "dependencies": { "jwa": "^2.0.1", "safe-buffer": "^5.0.1" } }, "sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA=="],
++
++    "lightningcss": ["lightningcss@1.33.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.33.0", "lightningcss-darwin-arm64": "1.33.0", "lightningcss-darwin-x64": "1.33.0", "lightningcss-freebsd-x64": "1.33.0", "lightningcss-linux-arm-gnueabihf": "1.33.0", "lightningcss-linux-arm64-gnu": "1.33.0", "lightningcss-linux-arm64-musl": "1.33.0", "lightningcss-linux-x64-gnu": "1.33.0", "lightningcss-linux-x64-musl": "1.33.0", "lightningcss-win32-arm64-msvc": "1.33.0", "lightningcss-win32-x64-msvc": "1.33.0" } }, "sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA=="],
++
++    "lightningcss-android-arm64": ["lightningcss-android-arm64@1.33.0", "", { "os": "android", "cpu": "arm64" }, "sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg=="],
++
++    "lightningcss-darwin-arm64": ["lightningcss-darwin-arm64@1.33.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Sciaz8eenNTKn9b3t7+xr0ipTp9YxKQY4npwQ3mrRuL0BAVHBLyZxofhaKBAVtzmtRZ/zTyo0/to4B1uWG/Djg=="],
++
++    "lightningcss-darwin-x64": ["lightningcss-darwin-x64@1.33.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-Z5UPAxzrjlWNNyGy6i65cJzzvgJ5D3T6wMvs+gWpY9d7qRhANrxqAp6LhxIgZhWEw18RfJTGcRxjuLIBr+m8XQ=="],
++
++    "lightningcss-freebsd-x64": ["lightningcss-freebsd-x64@1.33.0", "", { "os": "freebsd", "cpu": "x64" }, "sha512-QQM/Ti/hQajJwCY+RiWuCZ9sdtI/XQk7nDK5vC8kkdwixezOlDgvDx7+RT+QjK6FcFT4MpsuoBnHIo/O3StRRg=="],
++
++    "lightningcss-linux-arm-gnueabihf": ["lightningcss-linux-arm-gnueabihf@1.33.0", "", { "os": "linux", "cpu": "arm" }, "sha512-N7FVBe6iS24MlM6R/4RBTxGhQheZGs7tiQ9U32UtF75NzP5Q7xWPRqLBCKxlRQRk3rY1jCIPLzx7WzOhuUIRLQ=="],
++
++    "lightningcss-linux-arm64-gnu": ["lightningcss-linux-arm64-gnu@1.33.0", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-j2v/itmy4HlNxlc6voKXYgBqNi0Ng2LShg4z7GufpEgs05P+2suBVyi9I6YHq5uoVFx9ETin3eCEhLVyXGQnKg=="],
++
++    "lightningcss-linux-arm64-musl": ["lightningcss-linux-arm64-musl@1.33.0", "", { "os": "linux", "cpu": "arm64", "libc": "musl" }, "sha512-yiO5ROMuYQgXbC60yjZU5CYSFZGKXL0HFATXt9mHJn1+zW55oCtMI9NfcVhYLMFDL7gV7oBPon/EmMMGg2OvtQ=="],
++
++    "lightningcss-linux-x64-gnu": ["lightningcss-linux-x64-gnu@1.33.0", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg=="],
++
++    "lightningcss-linux-x64-musl": ["lightningcss-linux-x64-musl@1.33.0", "", { "os": "linux", "cpu": "x64", "libc": "musl" }, "sha512-RYiYbkokw0trfKqqzfF55lginwEPrD3OJDfTuJzFs1MK6iFnDenaz1fqLLtX4ITG3OktJQXOeTaw1awrBAlZPw=="],
++
++    "lightningcss-win32-arm64-msvc": ["lightningcss-win32-arm64-msvc@1.33.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA=="],
++
++    "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.33.0", "", { "os": "win32", "cpu": "x64" }, "sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA=="],
++
++    "long": ["long@5.3.2", "", {}, "sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA=="],
++
++    "lucide-react": ["lucide-react@0.546.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-Z94u6fKT43lKeYHiVyvyR8fT7pwCzDu7RyMPpTvh054+xahSgj4HFQ+NmflvzdXsoAjYGdCguGaFKYuvq0ThCQ=="],
++
++    "magic-string": ["magic-string@1.4.5", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w=="],
++
++    "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
++
++    "media-typer": ["media-typer@0.3.0", "", {}, "sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ=="],
++
++    "merge-descriptors": ["merge-descriptors@1.0.3", "", {}, "sha512-gaNvAS7TZ897/rVaZ0nMtAyxNyi/pdbjbAwUpFQpN70GqnVfOiXpeUUMKRBmzXaSQ8DdTX4/0ms62r2K+hE6mQ=="],
++
++    "methods": ["methods@1.1.2", "", {}, "sha512-iclAHeNqNm68zFtnZ0e+1L2yUIdvzNoauKU4WBA3VvH/vPFieF7qfRlwUZU+DA9P9bPXIS90ulxoUoCH23sV2w=="],
++
++    "mime": ["mime@1.6.0", "", { "bin": { "mime": "cli.js" } }, "sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg=="],
++
++    "mime-db": ["mime-db@1.52.0", "", {}, "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="],
++
++    "mime-types": ["mime-types@2.1.35", "", { "dependencies": { "mime-db": "1.52.0" } }, "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw=="],
++
++    "motion": ["motion@12.43.0", "", { "dependencies": { "framer-motion": "^12.43.0", "tslib": "^2.4.0" }, "peerDependencies": { "@emotion/is-prop-valid": "*", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["@emotion/is-prop-valid", "react", "react-dom"] }, "sha512-BQgQbSa9Hn3/mtbib0MK53y6JSANa+YKUKlaYnWzAVDH424RYQ5LVpV3pNiWH00BA2z4ojsSdMzqT7g2FQwjuQ=="],
++
++    "motion-dom": ["motion-dom@12.43.0", "", { "dependencies": { "motion-utils": "^12.39.0" } }, "sha512-azKON4d9S65PEoFUiQTMTgPheEmzf2QngdRc50AKfJp9Q9mmcBVw22c8eMq9k8kxOFHdL7+WZY7N/5F/lwiDag=="],
++
++    "motion-utils": ["motion-utils@12.39.0", "", {}, "sha512-8nadJAJjTtqRkmRF36FoJTrywK9nnFmnPwnSMyxaOCU7GDjN9RTMJIxx9De8ErM+vpPhMccr/6fo5WciyQLnMQ=="],
++
++    "ms": ["ms@2.0.0", "", {}, "sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A=="],
++
++    "nanoid": ["nanoid@3.3.20", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ=="],
++
++    "negotiator": ["negotiator@0.6.3", "", {}, "sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg=="],
++
++    "node-domexception": ["node-domexception@1.0.0", "", {}, "sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ=="],
++
++    "node-fetch": ["node-fetch@3.3.2", "", { "dependencies": { "data-uri-to-buffer": "^4.0.0", "fetch-blob": "^3.1.4", "formdata-polyfill": "^4.0.10" } }, "sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA=="],
++
++    "node-releases": ["node-releases@2.0.65", "", {}, "sha512-PfvofsGQ+MiOQIPkX9fU8ELUWmy5zL74CdQaph/ismKszfFkfwXaw0cGiwbwym2hT9k5+mdyl8O5WQ1MD8EHmA=="],
++
++    "object-inspect": ["object-inspect@1.14.0", "", {}, "sha512-IVgHNlp/jwQX271+Xzoq9LZNTWXxZK+cEOrGBOBxXNbn7fapnZ+Ts6TVMgNOuAezwG2wdtnMX97tTPK6VEnuOQ=="],
++
++    "on-finished": ["on-finished@2.4.2", "", { "dependencies": { "ee-first": "1.1.1" } }, "sha512-ATWUv387i+nLD49EiDoOft5scf32Vsdz3ktrQJG9bi7jRFmaXTssvyvj1EmeKVVgvesbqUtvQQvaS2TpTukAZQ=="],
++
++    "p-retry": ["p-retry@4.6.2", "", { "dependencies": { "@types/retry": "0.12.0", "retry": "^0.13.1" } }, "sha512-312Id396EbJdvRONlngUx0NydfrIQ5lsYu0znKVUzVvArzEIt08V1qhtyESbGVd1FGX7UKtiFp5uwKZdM8wIuQ=="],
++
++    "parseurl": ["parseurl@1.3.3", "", {}, "sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ=="],
++
++    "path-to-regexp": ["path-to-regexp@0.1.13", "", {}, "sha512-A/AGNMFN3c8bOlvV9RreMdrv7jsmF9XIfDeCd87+I8RNg6s78BhJxMu69NEMHBSJFxKidViTEdruRwEk/WIKqA=="],
++
++    "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
++
++    "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
++
++    "postcss": ["postcss@8.5.33", "", { "dependencies": { "nanoid": "^3.3.20", "picocolors": "^1.1.1", "source-map-js": "^1.2.2" } }, "sha512-RVHEU9/Pp1Fnjr/MpAJsZoADukCKhfIi15OunEYiGktIkYLkPVvC1sioWolGDS7XByMTx9m/IGbro0Js13zhnQ=="],
++
++    "postcss-value-parser": ["postcss-value-parser@4.2.0", "", {}, "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ=="],
++
++    "protobufjs": ["protobufjs@7.6.6", "", { "dependencies": { "@protobufjs/aspromise": "^1.1.2", "@protobufjs/base64": "^1.1.2", "@protobufjs/codegen": "^2.0.5", "@protobufjs/eventemitter": "^1.1.1", "@protobufjs/fetch": "^1.1.1", "@protobufjs/float": "^1.0.2", "@protobufjs/path": "^1.1.2", "@protobufjs/pool": "^1.1.0", "@protobufjs/utf8": "^1.1.1", "@types/node": ">=13.7.0", "long": "^5.3.2" }, "hasInstallScript": true }, "sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg=="],
++
++    "proxy-addr": ["proxy-addr@2.0.8", "", { "dependencies": { "forwarded": "0.2.0", "ipaddr.js": "1.9.1" } }, "sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ=="],
++
++    "qs": ["qs@6.16.2", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-VYdnB5S7/0IeXzBacUtwNAaM6d7Y/PgYnNC7bJCI6meqA/OgnsQbZMtVW8Dt2D1PHgbHGtYmhSoEIgvt7xZ2ZA=="],
++
++    "range-parser": ["range-parser@1.2.1", "", {}, "sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg=="],
++
++    "raw-body": ["raw-body@2.5.3", "", { "dependencies": { "bytes": "~3.1.2", "http-errors": "~2.0.1", "iconv-lite": "~0.4.24", "unpipe": "~1.0.0" } }, "sha512-s4VSOf6yN0rvbRZGxs8Om5CWj6seneMwK3oDb4lWDH0UPhWcxwOWw5+qk24bxq87szX1ydrwylIOp2uG1ojUpA=="],
++
++    "react": ["react@19.3.1", "", {}, "sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw=="],
++
++    "react-dom": ["react-dom@19.3.1", "", { "dependencies": { "scheduler": "^0.28.0" }, "peerDependencies": { "react": "^19.3.1" } }, "sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ=="],
++
++    "retry": ["retry@0.13.1", "", {}, "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg=="],
++
++    "rolldown": ["rolldown@1.2.19", "", { "dependencies": { "@oxc-project/types": "=0.156.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.19", "@rolldown/binding-android-arm64": "1.2.19", "@rolldown/binding-darwin-arm64": "1.2.19", "@rolldown/binding-darwin-x64": "1.2.19", "@rolldown/binding-freebsd-x64": "1.2.19", "@rolldown/binding-linux-arm-gnueabihf": "1.2.19", "@rolldown/binding-linux-arm64-gnu": "1.2.19", "@rolldown/binding-linux-arm64-musl": "1.2.19", "@rolldown/binding-linux-ppc64-gnu": "1.2.19", "@rolldown/binding-linux-s390x-gnu": "1.2.19", "@rolldown/binding-linux-x64-gnu": "1.2.19", "@rolldown/binding-linux-x64-musl": "1.2.19", "@rolldown/binding-openharmony-arm64": "1.2.19", "@rolldown/binding-wasm32-wasi": "1.2.19", "@rolldown/binding-win32-arm64-msvc": "1.2.19", "@rolldown/binding-win32-x64-msvc": "1.2.19" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-QIiV1J9d0pzN4jeeTH4sjPy0AZ6cAy2cG0ExeoE1+U8Rvj+hR3gYkokx0YbeUNGlZqiQJJ2utcETe0oKXwzsuA=="],
++
++    "safe-buffer": ["safe-buffer@5.2.1", "", {}, "sha512-rp3So07KcdmmKbGvgaNxQSJr7bGVSVk5S9Eq1F+ppbRo70+YeaDxkw5Dd8NPN+GD6bjnYm2VuPuCXmpuYvmCXQ=="],
++
++    "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
++
++    "scheduler": ["scheduler@0.28.0", "", {}, "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw=="],
++
++    "send": ["send@0.19.2", "", { "dependencies": { "debug": "2.6.9", "depd": "2.0.0", "destroy": "1.2.0", "encodeurl": "~2.0.0", "escape-html": "~1.0.3", "etag": "~1.8.1", "fresh": "~0.5.2", "http-errors": "~2.0.1", "mime": "1.6.0", "ms": "2.1.3", "on-finished": "~2.4.1", "range-parser": "~1.2.1", "statuses": "~2.0.2" } }, "sha512-VMbMxbDeehAxpOtWJXlcUS5E8iXh6QmN+BkRX1GARS3wRaXEEgzCcB10gTQazO42tpNIya8xIyNx8fll1OFPrg=="],
++
++    "serve-static": ["serve-static@1.16.3", "", { "dependencies": { "encodeurl": "~2.0.0", "escape-html": "~1.0.3", "parseurl": "~1.3.3", "send": "~0.19.1" } }, "sha512-x0RTqQel6g5SY7Lg6ZreMmsOzncHFU7nhnRWkKgWuMTu5NN0DR5oruckMqRvacAN9d5w6ARnRBXl9xhDCgfMeA=="],
++
++    "setprototypeof": ["setprototypeof@1.2.0", "", {}, "sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw=="],
++
++    "side-channel": ["side-channel@1.1.1", "", { "dependencies": { "es-errors": "^1.3.0", "object-inspect": "^1.13.4", "side-channel-list": "^1.0.1", "side-channel-map": "^1.0.1", "side-channel-weakmap": "^1.0.2" } }, "sha512-6x6dK6zJdpTzF4sQeNYxwtvBzf6Eg4GtlesS94HOvTudUeyK2WXAaIfmDgsyslYrRBeFIlsi54AYsFGUuhmvrQ=="],
++
++    "side-channel-list": ["side-channel-list@1.0.1", "", { "dependencies": { "es-errors": "^1.3.0", "object-inspect": "^1.13.4" } }, "sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w=="],
++
++    "side-channel-map": ["side-channel-map@1.0.1", "", { "dependencies": { "call-bound": "^1.0.2", "es-errors": "^1.3.0", "get-intrinsic": "^1.2.5", "object-inspect": "^1.13.3" } }, "sha512-VCjCNfgMsby3tTdo02nbjtM/ewra6jPHmpThenkTYh8pG9ucZ/1P8So4u4FGBek/BjpOVsDCMoLA/iuBKIFXRA=="],
++
++    "side-channel-weakmap": ["side-channel-weakmap@1.0.2", "", { "dependencies": { "call-bound": "^1.0.2", "es-errors": "^1.3.0", "get-intrinsic": "^1.2.5", "object-inspect": "^1.13.3", "side-channel-map": "^1.0.1" } }, "sha512-WPS/HvHQTYnHisLo9McqBHOJk2FkHO/tlpvldyrnem4aeQp4hai3gythswg6p01oSoTl58rcpiFAjF2br2Ak2A=="],
++
++    "source-map-js": ["source-map-js@1.2.3", "", {}, "sha512-xj+WrAkyv5Qp+t7r9N5HvCBu7g1qOe6CKRNpq22X1GGcPEQADFU54v5qsPVs3/vrUFQ7XivFrcAVKA2stI0kWA=="],
++
++    "statuses": ["statuses@2.0.2", "", {}, "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="],
++
++    "tailwindcss": ["tailwindcss@4.3.5", "", {}, "sha512-FcQk9BuffmEHJP2G0XmB2SplU1aLTI7j07Kunk+U74Ny+XiWOtzXz9aujFZ/avntw1e2cOv/3PkgzflQ7gX2vQ=="],
++
++    "tapable": ["tapable@2.3.4", "", {}, "sha512-NHFiWnAbMJxNNpBwiO7jJVGDuqMxT9/oV8v57RR+fgBQShkJil5inGD8/xWy0hjLyHQyX1tu27QANhlz3KBqCg=="],
++
++    "tinyglobby": ["tinyglobby@0.2.17", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g=="],
++
++    "toidentifier": ["toidentifier@1.0.1", "", {}, "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="],
++
++    "tslib": ["tslib@2.9.1", "", {}, "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA=="],
++
++    "tsx": ["tsx@4.23.15", "", { "dependencies": { "esbuild": "~0.28.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "bin": { "tsx": "dist/cli.mjs" } }, "sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw=="],
++
++    "type-is": ["type-is@1.6.18", "", { "dependencies": { "media-typer": "0.3.0", "mime-types": "~2.1.24" } }, "sha512-TkRKr9sUTxEH8MdfuCSP7VizJyzRNMjj2J2do2Jr3Kym598JVdEksuzPQCnlFPW4ky9Q+iA+ma9BGm06XQBy8g=="],
++
++    "typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
++
++    "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
++
++    "unpipe": ["unpipe@1.0.0", "", {}, "sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ=="],
++
++    "update-browserslist-db": ["update-browserslist-db@1.4.0", "", { "dependencies": { "escalade": "^3.2.0", "picocolors": "^1.1.1" }, "peerDependencies": { "browserslist": ">= 4.21.0" }, "bin": { "update-browserslist-db": "cli.js" } }, "sha512-WPJuOnjI9FWDct4fB+ej4Mz8opLaw5CDcZ2t44tFZ0vIQVYWzBhWR3mkixuUj/A7+vY4V9+ApOZ2YYLwdgq46w=="],
++
++    "utils-merge": ["utils-merge@1.0.1", "", {}, "sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA=="],
++
++    "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
++
++    "vite": ["vite@8.3.8", "", { "dependencies": { "lightningcss": "^1.33.0", "picomatch": "^4.0.7", "postcss": "^8.5.32", "rolldown": "~1.2.18", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.7.1 || ^0.8.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-LzOn3h9rG/0vhLdXrV4yJ4QFA9eEoqCl+Yx+kGJd7aB9w6nfNgVHKSYwLPZUHrz4ZGa+t+kXjV9itvcHDLQouA=="],
++
++    "web-streams-polyfill": ["web-streams-polyfill@3.3.3", "", {}, "sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw=="],
++
++    "ws": ["ws@8.23.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-wCkmX8QMOrKjgO8HW2WyDbTSGeqkocxgDzS9iR79rEAexty6/2qzilx3Ag8Tqf9ykop3irLKle0MtVn5qjVnoQ=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.11.3", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.3", "tslib": "^2.4.0" }, "bundled": true }, "sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" }, "bundled": true }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.3", "", { "dependencies": { "tslib": "^2.4.0" }, "bundled": true }, "sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.7", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3", "@emnapi/runtime": "^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3" }, "bundled": true }, "sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/@tybys/wasm-util": ["@tybys/wasm-util@0.10.5", "", { "dependencies": { "tslib": "^2.4.0" }, "bundled": true }, "sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA=="],
++
++    "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.9.1", "", { "bundled": true }, "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA=="],
++
++    "https-proxy-agent/debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" }, "peerDependencies": { "supports-color": "*" }, "optionalPeers": ["supports-color"] }, "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA=="],
++
++    "send/ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
++
++    "tsx/esbuild": ["esbuild@0.28.2", "", { "optionalDependencies": { "@esbuild/aix-ppc64": "0.28.2", "@esbuild/android-arm": "0.28.2", "@esbuild/android-arm64": "0.28.2", "@esbuild/android-x64": "0.28.2", "@esbuild/darwin-arm64": "0.28.2", "@esbuild/darwin-x64": "0.28.2", "@esbuild/freebsd-arm64": "0.28.2", "@esbuild/freebsd-x64": "0.28.2", "@esbuild/linux-arm": "0.28.2", "@esbuild/linux-arm64": "0.28.2", "@esbuild/linux-ia32": "0.28.2", "@esbuild/linux-loong64": "0.28.2", "@esbuild/linux-mips64el": "0.28.2", "@esbuild/linux-ppc64": "0.28.2", "@esbuild/linux-riscv64": "0.28.2", "@esbuild/linux-s390x": "0.28.2", "@esbuild/linux-x64": "0.28.2", "@esbuild/netbsd-arm64": "0.28.2", "@esbuild/netbsd-x64": "0.28.2", "@esbuild/openbsd-arm64": "0.28.2", "@esbuild/openbsd-x64": "0.28.2", "@esbuild/openharmony-arm64": "0.28.2", "@esbuild/sunos-x64": "0.28.2", "@esbuild/win32-arm64": "0.28.2", "@esbuild/win32-ia32": "0.28.2", "@esbuild/win32-x64": "0.28.2" }, "hasInstallScript": true, "bin": { "esbuild": "bin/esbuild" } }, "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA=="],
++
++    "https-proxy-agent/debug/ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
++
++    "tsx/esbuild/@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.28.2", "", { "os": "aix", "cpu": "ppc64" }, "sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ=="],
++
++    "tsx/esbuild/@esbuild/android-arm": ["@esbuild/android-arm@0.28.2", "", { "os": "android", "cpu": "arm" }, "sha512-kXXoiPVVGQcnIYGOeaovwOURpniDBpSq4A03qkQ+BMQqtGG6HYap3xne9C1O1yo4TR3qxlCX5IqqmX6fFo2Lqg=="],
++
++    "tsx/esbuild/@esbuild/android-arm64": ["@esbuild/android-arm64@0.28.2", "", { "os": "android", "cpu": "arm64" }, "sha512-5YfKeeI8qWfBZIX+u2xZC3Zlb3Os/gLS2sbEKM+I4ZOcsWmHS2WLysCcQZDAFRslDUU5Oiq44gf6PYN1vGwG5A=="],
++
++    "tsx/esbuild/@esbuild/android-x64": ["@esbuild/android-x64@0.28.2", "", { "os": "android", "cpu": "x64" }, "sha512-O387ite7SzUyCcy3JQX4P4bLtEA7bLLkx+esve5JHnyYfNTxcVpXZo9jhdB0lTKN44gztELTdU7nS8Nr16Fs1Q=="],
++
++    "tsx/esbuild/@esbuild/darwin-arm64": ["@esbuild/darwin-arm64@0.28.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-n4KqkOQrraxHJcgjM1RvwbigfQKIKJVpM7xp+KsxiyUSrRdIXnt73VhrPAx0fV44hgfmIVKjxMN9J1t5jySVkw=="],
++
++    "tsx/esbuild/@esbuild/darwin-x64": ["@esbuild/darwin-x64@0.28.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-uq6suIWYP37qzGddBKPw5QEQPi6HiLGsO7UmkpfyaYNQ3D+rN6w6WfwH+nuqcGXWvawGwxOEroO4YGnFh95azw=="],
++
++    "tsx/esbuild/@esbuild/freebsd-arm64": ["@esbuild/freebsd-arm64@0.28.2", "", { "os": "freebsd", "cpu": "arm64" }, "sha512-n+I0BTSRIoy+d6RPKnEVwql5UwBJolytvY4mAOIEJorKlqgPII8ix6slVVrfZ5Tnj7glIZvloylbB/EJPMWEXw=="],
++
++    "tsx/esbuild/@esbuild/freebsd-x64": ["@esbuild/freebsd-x64@0.28.2", "", { "os": "freebsd", "cpu": "x64" }, "sha512-78XJTJkvPs0kz2w61301PJjXl4g7q3JqiYMZ/M/yVI73EHBrCRTgkhu9oqG7vPqq+a/yadEW8aD+agKlk5xrmg=="],
++
++    "tsx/esbuild/@esbuild/linux-arm": ["@esbuild/linux-arm@0.28.2", "", { "os": "linux", "cpu": "arm" }, "sha512-XlDnu2q5yoqems+xay6wSAcg9DDD7K9RLKZEBOMZm3ckNpJBvOX20tSfby8KfrrhINDyv9V2YVZKY/SpoGJI8w=="],
++
++    "tsx/esbuild/@esbuild/linux-arm64": ["@esbuild/linux-arm64@0.28.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-pW4AC0P3it8c7do9MVM4p51FzHzdM/TZrerurgRcHJ2WTa1VQ1CIq18xncfpBJw4ojkiZZrKW2yIBWBP92j6Ug=="],
++
++    "tsx/esbuild/@esbuild/linux-ia32": ["@esbuild/linux-ia32@0.28.2", "", { "os": "linux", "cpu": "ia32" }, "sha512-CYbnj78HsIeA+DhgUKgFCfvNsTHFhMMrinUrMZpDXJXKN8T3XViTZ/+wtHeVxEWY8ewSzTFN+nRmSwO2tZaLUQ=="],
++
++    "tsx/esbuild/@esbuild/linux-loong64": ["@esbuild/linux-loong64@0.28.2", "", { "os": "linux", "cpu": "none" }, "sha512-buwkd8nsph4R+ajRvw0qM5Hja/TXQow3ptzWO2EbG/cqcIkHloRrdlBtQlshyYGTNFvfkfJ5tpPLVkY4DtsPfQ=="],
++
++    "tsx/esbuild/@esbuild/linux-mips64el": ["@esbuild/linux-mips64el@0.28.2", "", { "os": "linux", "cpu": "none" }, "sha512-ZVykbDyk7519VwiNb9Lcj9m8XM6v5V9uKPvrEMkkEedVewf+0itkhahp4HDpgERXhwLRpWFypsGbG/J8s0QjJA=="],
++
++    "tsx/esbuild/@esbuild/linux-ppc64": ["@esbuild/linux-ppc64@0.28.2", "", { "os": "linux", "cpu": "ppc64" }, "sha512-CAXl+Dtd9UUuJd8pKKdwh6MLm3MUMiqMPmhZ3tTSXPqfyQ3vDl6R5hZdZ/kYojK4ofXtdfSv1tFq8XzWx3heNQ=="],
++
++    "tsx/esbuild/@esbuild/linux-riscv64": ["@esbuild/linux-riscv64@0.28.2", "", { "os": "linux", "cpu": "none" }, "sha512-GeXCej4IQtU1B+QlDV8W/RRvbzI3O/Stss+/bCXv4lZls5WGRtu2a+3JkA3i4qIUlMXpcHebWpF8AkJhATowuA=="],
++
++    "tsx/esbuild/@esbuild/linux-s390x": ["@esbuild/linux-s390x@0.28.2", "", { "os": "linux", "cpu": "s390x" }, "sha512-3H1weTYZPxt/WOhByszQZybS9w5lKzUn1FDMsgEChbHWQwHYQQRfBxgCcZvPhjHfKyJjIievvMmEUawJrdY9Dg=="],
++
++    "tsx/esbuild/@esbuild/linux-x64": ["@esbuild/linux-x64@0.28.2", "", { "os": "linux", "cpu": "x64" }, "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ=="],
++
++    "tsx/esbuild/@esbuild/netbsd-arm64": ["@esbuild/netbsd-arm64@0.28.2", "", { "os": "none", "cpu": "arm64" }, "sha512-sSATRjPeDBg3pdgHoQfoYBob11Kk1FGa9lui5RIHZCoCkJa9QKlvl3/vKz2usCmYYjs7ymJR/2Nnsqe+Hjt5nw=="],
++
++    "tsx/esbuild/@esbuild/netbsd-x64": ["@esbuild/netbsd-x64@0.28.2", "", { "os": "none", "cpu": "x64" }, "sha512-lqnzCV+mM0gIADaKihiCg6ifgfU2L3h5E33rNQBN1Y4MaVGnzryzmvvf7UHxprpQdE8hpqLolJ9Rl+SkIRDpyw=="],
++
++    "tsx/esbuild/@esbuild/openbsd-arm64": ["@esbuild/openbsd-arm64@0.28.2", "", { "os": "openbsd", "cpu": "arm64" }, "sha512-AL2qJILH7lNjrDmCQDvdxMfAUIv8KMNZOvrwAQ8i8//ntL9FflhOyMJ8OZSMBb8/AWXe3/5v5S20y3zCoZWKoQ=="],
++
++    "tsx/esbuild/@esbuild/openbsd-x64": ["@esbuild/openbsd-x64@0.28.2", "", { "os": "openbsd", "cpu": "x64" }, "sha512-QtiuPytchRyC4rwUKhexJdQKvDuZ6hWloi3igqPQNUJCS1/v9EiO3UTOXR6A3FoMo4fnAKbWJdqaIwhOzh8qEw=="],
++
++    "tsx/esbuild/@esbuild/openharmony-arm64": ["@esbuild/openharmony-arm64@0.28.2", "", { "os": "none", "cpu": "arm64" }, "sha512-WkhYDmpTjLvGlScA1rwjRUmhl4k8oXR3cIbtqWmELgU/dFeHHlEllxDvdWcNJV9rbzCexB5vz8gtNewWLgCT7Q=="],
++
++    "tsx/esbuild/@esbuild/sunos-x64": ["@esbuild/sunos-x64@0.28.2", "", { "os": "sunos", "cpu": "x64" }, "sha512-GPMSkTOtMnv2U2F8gxe4Io6qmVs+YKyp832Etqqxr0hFngmXQ3rzwytelm3GIn7T4VviRUlf3sOgBOiTdvaf7g=="],
++
++    "tsx/esbuild/@esbuild/win32-arm64": ["@esbuild/win32-arm64@0.28.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-PIhhEkE9uPBleRBrQEJpUn7MBnibZzbGzYWPmY3x+YoVg/95zbjB4CxPPOQ8l5tYYM4mMaCthF8/1DIfBQQyWQ=="],
++
++    "tsx/esbuild/@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.2", "", { "os": "win32", "cpu": "ia32" }, "sha512-YmJbfTlvU7Sdn9BB+4PRES4oB6pxgS37MAONj+hBr/cpXS1aBPKXxNnDbu+QCWPj0o9dgyxeq79g6c5P8KeuYA=="],
++
++    "tsx/esbuild/@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
++  }
++}
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000..9e42c8f
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,29 @@
++<!doctype html>
++<html lang="en" class="dark">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>GitHistory Sync — Dual-LLM Commit History &amp; Footprint Classifier</title>
++    <meta
++      name="description"
++      content="Aggregate, classify with Dual-LLM (Gemini 4 Carbon High Thinking + NVIDIA NIM), and archive multi-branch GitHub commit history."
++    />
++    <meta property="og:title" content="GitHistory Sync — Dual-LLM Commit History &amp; Footprint Classifier" />
++    <meta
++      property="og:description"
++      content="Aggregate, classify with Dual-LLM (Gemini 4 Carbon High Thinking + NVIDIA NIM), and archive multi-branch GitHub commit history."
++    />
++    <meta property="og:type" content="website" />
++    <meta name="twitter:card" content="summary_large_image" />
++    <link rel="preconnect" href="https://fonts.googleapis.com" />
++    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++    <link
++      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
++      rel="stylesheet"
++    />
++  </head>
++  <body class="bg-slate-950 text-slate-200 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/metadata.json b/metadata.json
+new file mode 100644
+index 0000000..64fcb93
+--- /dev/null
++++ b/metadata.json
+@@ -0,0 +1,6 @@
++{
++  "name": "GitHistory Sync",
++  "description": "Aggregate, classify with Dual-LLM (Gemini 4 Carbon High Thinking + NVIDIA NIM), and archive multi-branch GitHub commit history.",
++  "requestFramePermissions": [],
++  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
++}
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..35c58f7
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,37 @@
++{
++  "name": "react-example",
++  "private": true,
++  "version": "0.0.0",
++  "type": "module",
++  "scripts": {
++    "dev": "tsx server.ts",
++    "start": "NODE_ENV=production node server.ts",
++    "build": "vite build",
++    "preview": "vite preview",
++    "clean": "rm -rf dist server.js",
++    "lint": "tsc --noEmit"
++  },
++  "dependencies": {
++    "@google/genai": "^3.6.1",
++    "@tailwindcss/vite": "^4.3.3",
++    "@vitejs/plugin-react": "^6.1.1",
++    "dotenv": "^17.2.3",
++    "express": "^4.21.2",
++    "lucide-react": "^0.546.0",
++    "motion": "^12.23.24",
++    "react": "^19.0.1",
++    "react-dom": "^19.0.1",
++    "vite": "^8.3.0"
++  },
++  "devDependencies": {
++    "@types/node": "^22.14.0",
++    "@types/react": "^19.3.0",
++    "@types/react-dom": "^19.3.0",
++    "autoprefixer": "^10.4.21",
++    "esbuild": "^0.25.0",
++    "tailwindcss": "^4.3.3",
++    "tsx": "^4.21.0",
++    "typescript": "^7.0.2",
++    "@types/express": "^4.17.21"
++  }
++}
+diff --git a/server.ts b/server.ts
+new file mode 100644
+index 0000000..b0824ac
+--- /dev/null
++++ b/server.ts
+@@ -0,0 +1,524 @@
++import 'dotenv/config';
++import express from 'express';
++import type { Request, Response } from 'express';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
++const PORT = Number(process.env.PORT || 3000);
++const GEMINI_PRIMARY_MODEL = 'gemini-4-carbon';
++const GEMINI_BACKUP_MODEL = 'gemini-3.1-flash-lite';
++const DEFAULT_NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
++
++interface CommitPayload {
++  sha: string;
++  repo: string;
++  message: string;
++  ciState?: string;
++  authorName: string;
++}
++
++interface VerdictItem {
++  sha: string;
++  classification: 'successful' | 'failed';
++  confidence: 'high' | 'medium' | 'low';
++  reason: string;
++  footprint: string;
++  model: string;
++}
++
++function createGeminiClient(): GoogleGenAI {
++  const apiKey = process.env.GEMINI_API_KEY;
++  if (!apiKey) {
++    throw new Error(
++      'GEMINI_API_KEY is not configured. Open Settings > Secrets to set your Gemini API key.'
++    );
++  }
++  return new GoogleGenAI({
++    apiKey,
++    httpOptions: {
++      headers: {
++        'User-Agent': 'aistudio-build',
++      },
++    },
++  });
++}
++
++function isGeminiKeyOrAuthError(err: unknown): boolean {
++  const raw = err instanceof Error ? err.message : String(err);
++  if (/GEMINI_API_KEY is not configured/i.test(raw)) return true;
++  return /403|PERMISSION_DENIED|API_KEY_INVALID/i.test(raw) && /key/i.test(raw);
++}
++
++function formatGeminiError(err: unknown, modelName = GEMINI_PRIMARY_MODEL): { status: number; message: string } {
++  const raw = err instanceof Error ? err.message : String(err);
++  if (/GEMINI_API_KEY is not configured/i.test(raw)) {
++    return { status: 403, message: raw };
++  }
++  if (/403|PERMISSION_DENIED|API_KEY_INVALID|400/i.test(raw) && /key/i.test(raw)) {
++    return {
++      status: 403,
++      message:
++        'Gemini API key was rejected or missing. Please verify your key in Settings > Secrets.',
++    };
++  }
++  if (/429|RESOURCE_EXHAUSTED/i.test(raw)) {
++    return {
++      status: 429,
++      message:
++        `Gemini quota exceeded for ${modelName}. Select a billing-enabled API key in Settings > Secrets to raise quota.`,
++    };
++  }
++  if (/404|NOT_FOUND/i.test(raw)) {
++    return {
++      status: 404,
++      message: `Model ${modelName} returned NOT_FOUND: ${raw}`,
++    };
++  }
++  return { status: 500, message: raw };
++}
++
++async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
++  let attempt = 0;
++  let lastError: unknown;
++  while (attempt <= retries) {
++    try {
++      return await fn();
++    } catch (err) {
++      lastError = err;
++      const msg = err instanceof Error ? err.message : String(err);
++      const isHardBillingZero = /limit:\s*0|billing/i.test(msg);
++      const retryable = !isHardBillingZero && /429|500|502|503|504|temporarily/i.test(msg);
++      if (!retryable || attempt === retries) break;
++      const cooldownMs = Math.min(15000, 1500 * Math.pow(2, attempt));
++      await new Promise((resolve) => setTimeout(resolve, cooldownMs));
++    }
++    attempt += 1;
++  }
++  throw lastError;
++}
++
++const VERDICT_ARRAY_SCHEMA = {
++  type: Type.ARRAY,
++  items: {
++    type: Type.OBJECT,
++    properties: {
++      sha: {
++        type: Type.STRING,
++        description: 'The exact commit SHA from the input.',
++      },
++      classification: {
++        type: Type.STRING,
++        description: 'Either "successful" or "failed".',
++      },
++      confidence: {
++        type: Type.STRING,
++        description: 'Either "high", "medium", or "low".',
++      },
++      footprint: {
++        type: Type.STRING,
++        description: 'Short 1-3 word change footprint tag (e.g. "feat (sync)", "bugfix", "refactor").',
++      },
++      reason: {
++        type: Type.STRING,
++        description: 'Concise 1-sentence justification referencing the commit signal.',
++      },
++    },
++    required: ['sha', 'classification', 'confidence', 'footprint', 'reason'],
++  },
++};
++
++function sanitizeVerdicts(items: unknown, modelName: string): VerdictItem[] {
++  if (!Array.isArray(items)) return [];
++  return items
++    .filter((x): x is Record<string, unknown> => Boolean(x && typeof x === 'object'))
++    .map((item) => {
++      const clsRaw = String(item.classification || '').toLowerCase();
++      const confRaw = String(item.confidence || '').toLowerCase();
++      const classification: 'successful' | 'failed' =
++        clsRaw === 'failed' ? 'failed' : 'successful';
++      const confidence: 'high' | 'medium' | 'low' =
++        confRaw === 'high' || confRaw === 'medium' || confRaw === 'low' ? confRaw : 'medium';
++      return {
++        sha: String(item.sha || ''),
++        classification,
++        confidence,
++        footprint: String(item.footprint || 'chore').slice(0, 48),
++        reason: String(item.reason || 'Classified by model review.').slice(0, 280),
++        model: modelName,
++      };
++    })
++    .filter((v) => Boolean(v.sha));
++}
++
++function buildSystemInstruction(role: string): string {
++  if (role === 'tie_breaker') {
++    return (
++      'You are the senior engineering tie-breaker auditing disputed git commits where two models disagreed. ' +
++      'Weigh regression risk, broken/unfinished WIP indicators, revert hints, and concrete completion evidence. ' +
++      'Classify each commit strictly as "successful" or "failed" with clear 1-sentence reasoning.'
++    );
++  }
++  if (role === 'specialist_success') {
++    return (
++      'You are a release engineer evaluating commit messages for shipped feature completeness, verified fixes, and healthy engineering progress. ' +
++      'Classify each commit as "successful" or "failed", assign confidence ("high", "medium", "low"), and extract a concise footprint label.'
++    );
++  }
++  if (role === 'specialist_risk') {
++    return (
++      'You are a reliability auditor inspecting commit messages for regression risk, incomplete WIP hacks, broken builds, or instability. ' +
++      'Return a JSON object {"verdicts":[...]} where each item has sha, classification ("successful"|"failed"), confidence ("high"|"medium"|"low"), footprint, and reason.'
++    );
++  }
++  return (
++    'You are an automated git commit history classifier. Determine whether each commit represents a healthy/successful change ("successful") ' +
++    'or a broken/reverted/WIP/failing change ("failed"). Return concise reasons and short engineering footprint labels.'
++  );
++}
++
++function resolveNvidiaTargetUrl(endpoint: string | undefined): string {
++  const trimmed = (endpoint || '').trim();
++  if (!trimmed || trimmed.startsWith('/api/')) {
++    return DEFAULT_NVIDIA_URL;
++  }
++  // If the client kept the legacy localhost:8787 default without running an external relay, route to NVIDIA NIM upstream
++  if (/^https?:\/\/(127\.0\.0\.1|localhost):8787/i.test(trimmed)) {
++    return DEFAULT_NVIDIA_URL;
++  }
++  return trimmed;
++}
++
++function extractJsonArray(rawText: string): unknown[] {
++  const cleaned = rawText
++    .replace(/^```json\s*/i, '')
++    .replace(/^```\s*/i, '')
++    .replace(/```\s*$/i, '')
++    .trim();
++  const parsed = JSON.parse(cleaned) as unknown;
++  if (Array.isArray(parsed)) return parsed;
++  if (parsed && typeof parsed === 'object' && 'verdicts' in parsed) {
++    const v = (parsed as { verdicts?: unknown }).verdicts;
++    if (Array.isArray(v)) return v;
++  }
++  return [];
++}
++
++async function startServer() {
++  const app = express();
++  app.use(express.json({ limit: '2mb' }));
++
++  app.get('/api/health', (_req: Request, res: Response) => {
++    res.json({
++      ok: true,
++      geminiModel: GEMINI_PRIMARY_MODEL,
++      geminiBackupModel: GEMINI_BACKUP_MODEL,
++      geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
++      nvidiaConfigured: Boolean(process.env.NVIDIA_API_KEY),
++    });
++  });
++
++  const buildGeminiTestConfig = (model: string) => ({
++    systemInstruction: 'Confirm API readiness concisely in JSON.',
++    ...(model === GEMINI_PRIMARY_MODEL
++      ? { thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } }
++      : {}),
++    responseMimeType: 'application/json',
++    responseSchema: {
++      type: Type.OBJECT,
++      properties: {
++        status: { type: Type.STRING },
++      },
++      required: ['status'],
++    },
++  });
++
++  app.post('/api/gemini/test', async (req: Request, res: Response) => {
++    const { useGeminiBackup = true } = (req.body || {}) as { useGeminiBackup?: boolean };
++    try {
++      const ai = createGeminiClient();
++      try {
++        const response = await withRetry(() =>
++          ai.models.generateContent({
++            model: GEMINI_PRIMARY_MODEL,
++            contents: 'Respond with JSON confirming readiness to classify git commits.',
++            config: buildGeminiTestConfig(GEMINI_PRIMARY_MODEL),
++          })
++        );
++        const parsed = JSON.parse((response.text ?? '{"status":"Ready"}').trim()) as {
++          status?: string;
++        };
++        res.json({
++          ok: true,
++          model: GEMINI_PRIMARY_MODEL,
++          usedBackup: false,
++          status: parsed.status || 'Connected (ThinkingLevel.HIGH)',
++        });
++        return;
++      } catch (primaryErr) {
++        if (!useGeminiBackup || isGeminiKeyOrAuthError(primaryErr)) {
++          throw primaryErr;
++        }
++        const primaryFormatted = formatGeminiError(primaryErr, GEMINI_PRIMARY_MODEL);
++        try {
++          const backupResponse = await withRetry(() =>
++            ai.models.generateContent({
++              model: GEMINI_BACKUP_MODEL,
++              contents: 'Respond with JSON confirming readiness to classify git commits.',
++              config: buildGeminiTestConfig(GEMINI_BACKUP_MODEL),
++            })
++          );
++          const parsed = JSON.parse((backupResponse.text ?? '{"status":"Ready"}').trim()) as {
++            status?: string;
++          };
++          res.json({
++            ok: true,
++            model: GEMINI_BACKUP_MODEL,
++            usedBackup: true,
++            primaryModel: GEMINI_PRIMARY_MODEL,
++            primaryError: primaryFormatted.message,
++            status: parsed.status || `Connected backup (${GEMINI_BACKUP_MODEL})`,
++          });
++          return;
++        } catch (backupErr) {
++          const backupFormatted = formatGeminiError(backupErr, GEMINI_BACKUP_MODEL);
++          res.status(backupFormatted.status).json({
++            ok: false,
++            error: `Primary (${GEMINI_PRIMARY_MODEL}) failed: ${primaryFormatted.message} | Backup (${GEMINI_BACKUP_MODEL}) failed: ${backupFormatted.message}`,
++          });
++          return;
++        }
++      }
++    } catch (err) {
++      const formatted = formatGeminiError(err, GEMINI_PRIMARY_MODEL);
++      res.status(formatted.status).json({ ok: false, error: formatted.message });
++    }
++  });
++
++  app.post('/api/gemini/classify', async (req: Request, res: Response) => {
++    try {
++      const {
++        commits,
++        role = 'primary',
++        context,
++        useGeminiBackup = true,
++      } = req.body as {
++        commits?: CommitPayload[];
++        role?: string;
++        context?: Record<string, unknown>;
++        useGeminiBackup?: boolean;
++      };
++      if (!Array.isArray(commits) || commits.length === 0) {
++        res.status(400).json({ error: 'Request must include a non-empty commits array.' });
++        return;
++      }
++
++      const ai = createGeminiClient();
++      const userPrompt = JSON.stringify(
++        {
++          role,
++          commits,
++          ...(context ? { previousVerdicts: context } : {}),
++        },
++        null,
++        2
++      );
++
++      const invokeModel = async (model: string) => {
++        const response = await withRetry(() =>
++          ai.models.generateContent({
++            model,
++            contents: `Classify these git commits:\n${userPrompt}`,
++            config: {
++              systemInstruction: buildSystemInstruction(role),
++              ...(model === GEMINI_PRIMARY_MODEL
++                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH } }
++                : {}),
++              responseMimeType: 'application/json',
++              responseSchema: VERDICT_ARRAY_SCHEMA,
++            },
++          })
++        );
++        const rawText = (response.text ?? '[]').trim();
++        const parsed = JSON.parse(rawText) as unknown;
++        return sanitizeVerdicts(parsed, model);
++      };
++
++      try {
++        const verdicts = await invokeModel(GEMINI_PRIMARY_MODEL);
++        res.json({
++          verdicts,
++          modelUsed: GEMINI_PRIMARY_MODEL,
++          usedBackup: false,
++        });
++        return;
++      } catch (primaryErr) {
++        if (!useGeminiBackup || isGeminiKeyOrAuthError(primaryErr)) {
++          throw primaryErr;
++        }
++        const primaryFormatted = formatGeminiError(primaryErr, GEMINI_PRIMARY_MODEL);
++        try {
++          const verdicts = await invokeModel(GEMINI_BACKUP_MODEL);
++          res.json({
++            verdicts,
++            modelUsed: GEMINI_BACKUP_MODEL,
++            usedBackup: true,
++            primaryError: primaryFormatted.message,
++          });
++          return;
++        } catch (backupErr) {
++          const backupFormatted = formatGeminiError(backupErr, GEMINI_BACKUP_MODEL);
++          res.status(backupFormatted.status).json({
++            error: `Primary (${GEMINI_PRIMARY_MODEL}): ${primaryFormatted.message} | Backup (${GEMINI_BACKUP_MODEL}): ${backupFormatted.message}`,
++          });
++          return;
++        }
++      }
++    } catch (err) {
++      const formatted = formatGeminiError(err, GEMINI_PRIMARY_MODEL);
++      res.status(formatted.status).json({ error: formatted.message });
++    }
++  });
++
++  app.post('/api/nvidia/test', async (req: Request, res: Response) => {
++    try {
++      const { nvKey, nvModel, nvEndpoint } = req.body as {
++        nvKey?: string;
++        nvModel?: string;
++        nvEndpoint?: string;
++      };
++      const token = (nvKey || process.env.NVIDIA_API_KEY || '').trim();
++      if (!token) {
++        res.status(400).json({
++          ok: false,
++          error: 'Enter an NVIDIA API key (nvapi-...) or configure NVIDIA_API_KEY on the server.',
++        });
++        return;
++      }
++      const model = (nvModel || 'nvidia/nemotron-3.5-bolt-e4b').trim();
++      const targetUrl = resolveNvidiaTargetUrl(nvEndpoint);
++
++      const upstream = await fetch(targetUrl, {
++        method: 'POST',
++        headers: {
++          'Content-Type': 'application/json',
++          Authorization: `Bearer ${token}`,
++        },
++        body: JSON.stringify({
++          model,
++          messages: [
++            { role: 'system', content: 'Reply with {"status":"ok"} in JSON.' },
++            { role: 'user', content: 'ping' },
++          ],
++          temperature: 0.1,
++          max_tokens: 64,
++        }),
++      });
++
++      if (!upstream.ok) {
++        const text = await upstream.text();
++        res.status(upstream.status).json({
++          ok: false,
++          error: `NVIDIA NIM responded ${upstream.status}: ${text.slice(0, 220)}`,
++        });
++        return;
++      }
++
++      res.json({ ok: true, model, status: 'NVIDIA NIM relay reachable' });
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      res.status(502).json({ ok: false, error: `NVIDIA proxy failed: ${msg}` });
++    }
++  });
++
++  app.post('/api/nvidia/classify', async (req: Request, res: Response) => {
++    try {
++      const { commits, role = 'primary', nvKey, nvModel, nvEndpoint } = req.body as {
++        commits?: CommitPayload[];
++        role?: string;
++        nvKey?: string;
++        nvModel?: string;
++        nvEndpoint?: string;
++      };
++      if (!Array.isArray(commits) || commits.length === 0) {
++        res.status(400).json({ error: 'Request must include a non-empty commits array.' });
++        return;
++      }
++
++      const token = (nvKey || process.env.NVIDIA_API_KEY || '').trim();
++      if (!token) {
++        res.status(400).json({
++          error: 'NVIDIA API key is missing. Enter an nvapi- key or disable NVIDIA NIM.',
++        });
++        return;
++      }
++
++      const model = (nvModel || 'nvidia/nemotron-3.5-bolt-e4b').trim();
++      const targetUrl = resolveNvidiaTargetUrl(nvEndpoint);
++
++      const upstream = await withRetry(async () => {
++        const r = await fetch(targetUrl, {
++          method: 'POST',
++          headers: {
++            'Content-Type': 'application/json',
++            Authorization: `Bearer ${token}`,
++          },
++          body: JSON.stringify({
++            model,
++            messages: [
++              {
++                role: 'system',
++                content:
++                  buildSystemInstruction(role) +
++                  ' Return valid JSON matching {"verdicts":[{"sha":"...","classification":"successful|failed","confidence":"high|medium|low","footprint":"...","reason":"..."}]}.',
++              },
++              {
++                role: 'user',
++                content: JSON.stringify({ commits }),
++              },
++            ],
++            temperature: 0.1,
++          }),
++        });
++        if (!r.ok) {
++          const errText = await r.text();
++          throw new Error(`NVIDIA NIM returned ${r.status}: ${errText.slice(0, 240)}`);
++        }
++        return r;
++      });
++
++      const data = (await upstream.json()) as {
++        choices?: Array<{ message?: { content?: string } }>;
++      };
++      const content = data.choices?.[0]?.message?.content ?? '[]';
++      const parsed = extractJsonArray(content);
++      const verdicts = sanitizeVerdicts(parsed, model);
++      res.json({ verdicts });
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      res.status(502).json({ error: `NVIDIA NIM classification error: ${msg}` });
++    }
++  });
++
++  if (process.env.NODE_ENV !== 'production') {
++    const { createServer: createViteServer } = await import('vite');
++    const vite = await createViteServer({
++      server: { middlewareMode: true },
++      appType: 'spa',
++    });
++    app.use(vite.middlewares);
++  } else {
++    const distDir = path.resolve(__dirname, 'dist');
++    app.use(express.static(distDir));
++    app.get('*', (_req: Request, res: Response) => {
++      res.sendFile(path.join(distDir, 'index.html'));
++    });
++  }
++
++  app.listen(PORT, '0.0.0.0', () => {
++    console.log(`GitHistory Sync server running on http://0.0.0.0:${PORT}`);
++  });
++}
++
++startServer();
+diff --git a/src/App.tsx b/src/App.tsx
+new file mode 100644
+index 0000000..127d5ea
+--- /dev/null
++++ b/src/App.tsx
+@@ -0,0 +1,1035 @@
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { CredentialsPanel } from './components/CredentialsPanel';
++import { DestinationPanel } from './components/DestinationPanel';
++import { ExtractionPanel } from './components/ExtractionPanel';
++import { ToastStack } from './components/ToastStack';
++import { TopBar } from './components/TopBar';
++import { WorkspaceOutput } from './components/WorkspaceOutput';
++import type {
++  ActiveTaskTimer,
++  ActivityEntry,
++  ClassifiedCommit,
++  DestinationSettings,
++  ExtractionSettings,
++  FetchStats,
++  GitHubUser,
++  LogBucket,
++  LogLevel,
++  RawCommit,
++  SiphonedEngine,
++  ToastItem,
++} from './types/git';
++import { classifyAndOrchestrate, testGeminiConnection, testNvidiaConnection } from './utils/aiOrchestrator';
++import { DEFAULT_FAIL_PATTERN, DEFAULT_OK_PATTERN } from './utils/classifier';
++import { DEMO_COMMITS, DEMO_ENGINES, DEMO_REPOS, DEMO_USER } from './utils/demoData';
++import { formatDurationMs, formatSplitArchives } from './utils/formatter';
++import {
++  discoverRepositories,
++  extractCommitsForRepo,
++  lookupCommitCiState,
++  pushSplitArchivesToGitHub,
++  verifyGitHubToken,
++} from './utils/githubClient';
++import { loadOfflineSnapshot, saveOfflineSnapshot } from './utils/offlineStore';
++import { sleepWithAbort } from './utils/rateLimiter';
++import { DEFAULT_BASE_PATH, deriveLogPaths, matchesRepoFilter, validateDestination } from './utils/sources';
++
++const SETTINGS_STORAGE_KEY = 'githistory_sync_settings_v3';
++
++const DEFAULT_EXTRACTION: ExtractionSettings = {
++  authorFilter: '',
++  sources: '',
++  extAuthor: '',
++  repoFilter: '',
++  sinceDate: '',
++  untilDate: '',
++  branchScope: 'all',
++  siphonEngines: true,
++  includePrivate: true,
++  includeForks: false,
++  skipOwn: true,
++  includeEmails: true,
++  includeMine: true,
++  ciLookup: false,
++  failRx: DEFAULT_FAIL_PATTERN,
++  okRx: DEFAULT_OK_PATTERN,
++  aiStrategy: 'consensus',
++  useGemini: true,
++  useGeminiBackup: true,
++  useLlm: false,
++  nvKey: '',
++  nvModel: 'nvidia/nemotron-3.5-bolt-e4b',
++  nvEndpoint: '/api/nvidia/classify',
++  nvPrivate: false,
++};
++
++const DEFAULT_DESTINATION: DestinationSettings = {
++  targetRepo: 'craighckby-stack/V1',
++  targetBranch: 'main',
++  targetPath: DEFAULT_BASE_PATH,
++  fileFormat: 'json',
++  autoCreateRepo: true,
++};
++
++function nowStamp(): string {
++  const d = new Date();
++  return d.toTimeString().slice(0, 8);
++}
++
++export default function App() {
++  const [token, setToken] = useState('');
++  const [verifiedToken, setVerifiedToken] = useState('');
++  const [user, setUser] = useState<GitHubUser | null>(null);
++  const [isDemo, setIsDemo] = useState(false);
++  const [isVerifying, setIsVerifying] = useState(false);
++  const [isOffline, setIsOffline] = useState(() =>
++    typeof navigator !== 'undefined' ? navigator.onLine === false : false
++  );
++
++  const [extraction, setExtraction] = useState<ExtractionSettings>(() => {
++    try {
++      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
++      if (saved) {
++        const parsed = JSON.parse(saved) as { extraction?: Partial<ExtractionSettings> };
++        return { ...DEFAULT_EXTRACTION, ...(parsed.extraction || {}), nvKey: '' };
++      }
++    } catch {
++      // ignore invalid storage
++    }
++    return DEFAULT_EXTRACTION;
++  });
++
++  const [destination, setDestination] = useState<DestinationSettings>(() => {
++    try {
++      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
++      if (saved) {
++        const parsed = JSON.parse(saved) as { destination?: Partial<DestinationSettings> };
++        return { ...DEFAULT_DESTINATION, ...(parsed.destination || {}) };
++      }
++    } catch {
++      // ignore invalid storage
++    }
++    return DEFAULT_DESTINATION;
++  });
++
++  const [isFetching, setIsFetching] = useState(false);
++  const [isPushing, setIsPushing] = useState(false);
++  const [progressPct, setProgressPct] = useState(0);
++  const [taskTimer, setTaskTimer] = useState<ActiveTaskTimer | null>(null);
++  const [lastRunDurationMs, setLastRunDurationMs] = useState<number | null>(null);
++  const [stats, setStats] = useState<FetchStats>({
++    reposScanned: 0,
++    reposTotal: 0,
++    branchesScanned: 0,
++    uniqueCommits: 0,
++    enginesSiphoned: 0,
++    combinedBytes: 0,
++  });
++
++  const [commits, setCommits] = useState<ClassifiedCommit[]>([]);
++  const [engines, setEngines] = useState<SiphonedEngine[]>([]);
++  const [activeBucket, setActiveBucket] = useState<LogBucket>('successful');
++  const [logs, setLogs] = useState<ActivityEntry[]>([]);
++  const [toasts, setToasts] = useState<ToastItem[]>([]);
++
++  const [isTestingGemini, setIsTestingGemini] = useState(false);
++  const [isTestingNvidia, setIsTestingNvidia] = useState(false);
++  const [geminiStatusText, setGeminiStatusText] = useState<string | null>(null);
++  const [nvidiaStatusText, setNvidiaStatusText] = useState<string | null>(null);
++
++  const abortRef = useRef<AbortController | null>(null);
++
++  useEffect(() => {
++    try {
++      const { nvKey: _omit, ...safeExtraction } = extraction;
++      localStorage.setItem(
++        SETTINGS_STORAGE_KEY,
++        JSON.stringify({ extraction: safeExtraction, destination })
++      );
++    } catch {
++      // ignore storage quota errors
++    }
++  }, [extraction, destination]);
++
++  const addToast = useCallback((message: string, variant: ToastItem['variant'] = 'info') => {
++    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
++    setToasts((prev) => [...prev.slice(-3), { id, message, variant }]);
++    window.setTimeout(() => {
++      setToasts((prev) => prev.filter((t) => t.id !== id));
++    }, 5200);
++  }, []);
++
++  const dismissToast = useCallback((id: string) => {
++    setToasts((prev) => prev.filter((t) => t.id !== id));
++  }, []);
++
++  const appendLog = useCallback((message: string, level: LogLevel = 'info') => {
++    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
++    setLogs((prev) => [...prev.slice(-399), { id, timestamp: nowStamp(), level, message }]);
++  }, []);
++
++  useEffect(() => {
++    const handleOnline = () => {
++      setIsOffline(false);
++      appendLog('Network connection restored.', 'success');
++    };
++    const handleOffline = () => {
++      setIsOffline(true);
++      appendLog('Connection went offline — continuing with cached local archives & offline heuristics.', 'warn');
++    };
++    window.addEventListener('online', handleOnline);
++    window.addEventListener('offline', handleOffline);
++    return () => {
++      window.removeEventListener('online', handleOnline);
++      window.removeEventListener('offline', handleOffline);
++    };
++  }, [appendLog]);
++
++  const handleExtractionChange = useCallback(
++    <K extends keyof ExtractionSettings>(key: K, value: ExtractionSettings[K]) => {
++      setExtraction((prev) => ({ ...prev, [key]: value }));
++    },
++    []
++  );
++
++  const handleDestinationChange = useCallback(
++    <K extends keyof DestinationSettings>(key: K, value: DestinationSettings[K]) => {
++      setDestination((prev) => ({ ...prev, [key]: value }));
++    },
++    []
++  );
++
++  const handleTokenInputChange = useCallback(
++    (val: string) => {
++      setToken(val);
++      if (verifiedToken && val.trim() !== verifiedToken) {
++        setVerifiedToken('');
++        setUser(null);
++        setIsDemo(false);
++      }
++    },
++    [verifiedToken]
++  );
++
++  const splitArchives = useMemo(
++    () =>
++      formatSplitArchives(
++        commits,
++        destination.fileFormat,
++        { includeEmails: extraction.includeEmails },
++        engines
++      ),
++    [commits, destination.fileFormat, extraction.includeEmails, engines]
++  );
++
++  const filenames = useMemo(
++    () => deriveLogPaths(destination.targetPath, destination.fileFormat),
++    [destination.targetPath, destination.fileFormat]
++  );
++
++  useEffect(() => {
++    setStats((prev) => ({
++      ...prev,
++      uniqueCommits: commits.length,
++      enginesSiphoned: engines.length,
++      combinedBytes: commits.length > 0 || engines.length > 0 ? splitArchives.combinedBytes : 0,
++    }));
++  }, [commits.length, engines.length, splitArchives.combinedBytes]);
++
++  const persistSnapshot = useCallback(
++    async (
++      nextStats: FetchStats,
++      nextCommits: ClassifiedCommit[],
++      nextEngines: SiphonedEngine[],
++      nextLogs: ActivityEntry[]
++    ) => {
++      if (nextCommits.length === 0 && nextEngines.length === 0) return;
++      await saveOfflineSnapshot({
++        savedAt: new Date().toISOString(),
++        stats: nextStats,
++        commits: nextCommits,
++        engines: nextEngines,
++        logs: nextLogs.slice(-200),
++      });
++    },
++    []
++  );
++
++  const handleLoadDemo = useCallback(async () => {
++    if (isFetching) return;
++    const demoStartedAt = Date.now();
++    setIsDemo(true);
++    setVerifiedToken('');
++    setUser(DEMO_USER);
++    setExtraction((prev) => ({
++      ...prev,
++      authorFilter: prev.authorFilter || DEMO_USER.login,
++    }));
++    setLogs([]);
++    appendLog(
++      `Loaded deterministic demo workspace (@craighckby-stack · 3 repos, 8 commits, ${DEMO_ENGINES.length} full unredacted engines).`,
++      'info'
++    );
++
++    const heuristicOnlySettings: ExtractionSettings = {
++      ...extraction,
++      useGemini: false,
++      useLlm: false,
++    };
++    const classified = await classifyAndOrchestrate(
++      DEMO_COMMITS,
++      heuristicOnlySettings,
++      appendLog
++    );
++
++    const uniqueBranches = new Set<string>();
++    for (const c of classified) {
++      for (const b of c.branches) uniqueBranches.add(`${c.repo}:${b}`);
++    }
++
++    const demoStats: FetchStats = {
++      reposScanned: DEMO_REPOS.length,
++      reposTotal: DEMO_REPOS.length,
++      branchesScanned: uniqueBranches.size,
++      uniqueCommits: classified.length,
++      enginesSiphoned: DEMO_ENGINES.length,
++      combinedBytes: 0,
++    };
++    setCommits(classified);
++    setEngines(DEMO_ENGINES);
++    setStats(demoStats);
++    setLastRunDurationMs(Date.now() - demoStartedAt);
++    appendLog(
++      'Demo archives & unredacted engines compiled. Switch to the Engines tab to inspect full source code.',
++      'success'
++    );
++    addToast('Demo workspace loaded with commit logs and full unredacted engines.', 'success');
++    void persistSnapshot(demoStats, classified, DEMO_ENGINES, []);
++  }, [appendLog, addToast, extraction, isFetching, persistSnapshot]);
++
++  const hasActiveDataRef = useRef(false);
++  useEffect(() => {
++    if (commits.length > 0 || engines.length > 0 || isFetching) {
++      hasActiveDataRef.current = true;
++    }
++  }, [commits.length, engines.length, isFetching]);
++
++  useEffect(() => {
++    const params = new URLSearchParams(window.location.search);
++    if (params.get('autostart') === '1') {
++      void handleLoadDemo();
++      return;
++    }
++    if (params.get('fresh') === '1') {
++      return;
++    }
++
++    let cancelled = false;
++    void loadOfflineSnapshot().then((snapshot) => {
++      if (cancelled || !snapshot || hasActiveDataRef.current) return;
++      setCommits(snapshot.commits);
++      setEngines(snapshot.engines);
++      setStats(snapshot.stats);
++      setLogs([
++        ...snapshot.logs,
++        {
++          id: `restore-${Date.now()}`,
++          timestamp: nowStamp(),
++          level: 'info',
++          message: `Restored local offline cache (${snapshot.commits.length} commits, ${snapshot.engines.length} full engines from ${snapshot.savedAt.slice(0, 19).replace('T', ' ')}).`,
++        },
++      ]);
++    });
++
++    return () => {
++      cancelled = true;
++    };
++    // Run once on mount to handle autostart or restore previous offline snapshot
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  const handleVerifyToken = async () => {
++    if (isOffline) {
++      addToast('Cannot verify token while offline.', 'warning');
++      return;
++    }
++    const trimmed = token.trim();
++    if (!trimmed) {
++      setVerifiedToken('');
++      setUser(null);
++      setIsDemo(false);
++      addToast('Enter a GitHub personal access token.', 'warning');
++      return;
++    }
++
++    setIsVerifying(true);
++    appendLog('Authenticating with GitHub REST API...', 'info');
++    try {
++      const { user: ghUser, scopes } = await verifyGitHubToken(trimmed);
++      setVerifiedToken(trimmed);
++      setUser(ghUser);
++      setIsDemo(false);
++      if (!extraction.authorFilter) {
++        handleExtractionChange('authorFilter', ghUser.login);
++      }
++      appendLog(`Authenticated as @${ghUser.login} (${ghUser.name || 'no display name'}).`, 'success');
++      if (scopes !== null && !scopes.includes('repo') && !scopes.includes('public_repo')) {
++        appendLog(
++          `Token scopes: [${scopes || 'none'}]. Enable the repo scope to read private repos and push.`,
++          'warn'
++        );
++      }
++      addToast(`Connected as @${ghUser.login}`, 'success');
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      appendLog(`Authentication failed: ${msg}`, 'error');
++      addToast(`Authentication failed: ${msg}`, 'error');
++      setVerifiedToken('');
++      setUser(null);
++    } finally {
++      setIsVerifying(false);
++    }
++  };
++
++  const hasExternalSources = extraction.sources.trim().length > 0;
++
++  const handleReclassifyOffline = async () => {
++    if (isFetching || commits.length === 0) return;
++    const startedAt = Date.now();
++    appendLog(
++      `Re-classifying ${commits.length} locally loaded commits offline (heuristic & revert engine, zero LLM calls)...`,
++      'info'
++    );
++    const localOnly: ExtractionSettings = {
++      ...extraction,
++      useGemini: false,
++      useLlm: false,
++    };
++    const reclassified = await classifyAndOrchestrate(commits, localOnly, appendLog);
++    setCommits(reclassified);
++    const elapsed = Date.now() - startedAt;
++    setLastRunDurationMs(elapsed);
++    const okTotal = reclassified.filter((c) => c.classification === 'successful').length;
++    const failTotal = reclassified.length - okTotal;
++    appendLog(
++      `Offline local classification finished in ${formatDurationMs(elapsed)}: ${okTotal} successful, ${failTotal} failed.`,
++      'success'
++    );
++    addToast(`Re-classified ${reclassified.length} commits offline in ${formatDurationMs(elapsed)}.`, 'success');
++    void persistSnapshot(stats, reclassified, engines, logs);
++  };
++
++  const handleFetchAndClassify = async () => {
++    if ((!user && !hasExternalSources) || isFetching || isOffline) return;
++    if (extraction.sinceDate && extraction.untilDate && extraction.sinceDate > extraction.untilDate) {
++      addToast('The From date must be before the To date.', 'warning');
++      return;
++    }
++
++    const controller = new AbortController();
++    abortRef.current = controller;
++    const runStartedAt = Date.now();
++    setIsFetching(true);
++    setLastRunDurationMs(null);
++    setTaskTimer({
++      label: 'Discovering repositories',
++      detail: 'Resolving configured sources...',
++      runStartedAt,
++      itemStartedAt: runStartedAt,
++    });
++    setProgressPct(5);
++    setCommits([]);
++    setEngines([]);
++
++    let mergedCommits: RawCommit[] = [];
++    let mergedEngines: SiphonedEngine[] = [];
++    let totalRepos = 0;
++    let scannedRepos = 0;
++    let totalBranches = 0;
++
++    try {
++      if (isDemo) {
++        setTaskTimer({
++          label: 'Demo workspace',
++          detail: 'Preparing sample commit dataset & engines...',
++          runStartedAt,
++          itemStartedAt: Date.now(),
++        });
++        appendLog('Running extraction against demo repository dataset...', 'info');
++        const filteredRepos = DEMO_REPOS.filter((r) => {
++          if (!extraction.includePrivate && r.private) return false;
++          if (!extraction.includeForks && r.fork) return false;
++          if (!matchesRepoFilter(r.full_name, extraction.repoFilter)) return false;
++          return true;
++        });
++        totalRepos = filteredRepos.length;
++        const allowedNames = new Set(filteredRepos.map((r) => r.full_name));
++
++        mergedCommits = DEMO_COMMITS.filter((c) => {
++          if (!allowedNames.has(c.repo)) return false;
++          const dateOnly = c.date.slice(0, 10);
++          if (extraction.sinceDate && dateOnly < extraction.sinceDate) return false;
++          if (extraction.untilDate && dateOnly > extraction.untilDate) return false;
++          return true;
++        }).map((c) => ({
++          ...c,
++          authorEmail: extraction.includeEmails ? c.authorEmail : undefined,
++        }));
++
++        mergedEngines = extraction.siphonEngines
++          ? DEMO_ENGINES.filter((e) => allowedNames.has(e.repo))
++          : [];
++
++        scannedRepos = filteredRepos.length;
++        const bSet = new Set<string>();
++        for (const c of mergedCommits) {
++          for (const b of c.branches) bSet.add(`${c.repo}:${b}`);
++        }
++        totalBranches = bSet.size;
++        setProgressPct(55);
++        setStats({
++          reposScanned: scannedRepos,
++          reposTotal: totalRepos,
++          branchesScanned: totalBranches,
++          uniqueCommits: mergedCommits.length,
++          enginesSiphoned: mergedEngines.length,
++          combinedBytes: 0,
++        });
++      } else {
++        appendLog('Discovering repositories across selected sources...', 'info');
++        const { repos, externalOwners } = await discoverRepositories(
++          verifiedToken,
++          {
++            includeMine: extraction.includeMine,
++            includePrivate: extraction.includePrivate,
++            includeForks: extraction.includeForks,
++            sources: extraction.sources,
++            repoFilter: extraction.repoFilter,
++            signal: controller.signal,
++          },
++          appendLog
++        );
++
++        totalRepos = repos.length;
++        setStats({
++          reposScanned: 0,
++          reposTotal: totalRepos,
++          branchesScanned: 0,
++          uniqueCommits: 0,
++          enginesSiphoned: 0,
++          combinedBytes: 0,
++        });
++
++        if (repos.length === 0) {
++          appendLog('No repositories matched the selected filters.', 'warn');
++          addToast('No repositories matched your filters.', 'warning');
++          return;
++        }
++
++        for (let repoIndex = 0; repoIndex < repos.length; repoIndex += 1) {
++          const repo = repos[repoIndex];
++          if (controller.signal.aborted) throw new Error('Operation cancelled.');
++          const isExternal = externalOwners.has(repo.full_name.toLowerCase());
++          const author = isExternal ? extraction.extAuthor : extraction.authorFilter;
++          const repoStartedAt = Date.now();
++
++          setTaskTimer({
++            label: repo.full_name,
++            detail: `Repo ${repoIndex + 1} / ${totalRepos} · ${extraction.branchScope} branch scope`,
++            runStartedAt,
++            itemStartedAt: repoStartedAt,
++          });
++
++          try {
++            const res = await extractCommitsForRepo(verifiedToken, repo, {
++              author,
++              sinceDate: extraction.sinceDate,
++              untilDate: extraction.untilDate,
++              skipOwn: extraction.skipOwn,
++              includeEmails: extraction.includeEmails,
++              branchScope: extraction.branchScope,
++              siphonEngines: extraction.siphonEngines,
++              signal: controller.signal,
++              onLog: appendLog,
++              onProgress: ({
++                branchesScanned: repoBranches,
++                uniqueCommits: repoCommits,
++                enginesSiphoned: repoEngines,
++                currentBranch,
++                page,
++                stageDetail,
++              }) => {
++                setStats((prev) => ({
++                  ...prev,
++                  branchesScanned: totalBranches + repoBranches,
++                  uniqueCommits: mergedCommits.length + repoCommits,
++                  enginesSiphoned: mergedEngines.length + repoEngines,
++                }));
++                setTaskTimer({
++                  label: repo.full_name,
++                  detail: stageDetail
++                    ? `${stageDetail}`
++                    : `branch ${currentBranch} · page ${page} (${repoCommits} commits)`,
++                  runStartedAt,
++                  itemStartedAt: repoStartedAt,
++                });
++              },
++            });
++            scannedRepos += 1;
++            totalBranches += res.branchCount;
++            mergedCommits.push(...res.commits);
++            mergedEngines.push(...res.engines);
++            setProgressPct(Math.round((scannedRepos / totalRepos) * 60));
++            const approxBytes = new TextEncoder().encode(
++              JSON.stringify(mergedCommits) + JSON.stringify(mergedEngines)
++            ).length;
++            setStats((prev) => ({
++              ...prev,
++              reposScanned: scannedRepos,
++              branchesScanned: totalBranches,
++              uniqueCommits: mergedCommits.length,
++              enginesSiphoned: mergedEngines.length,
++              combinedBytes: approxBytes,
++            }));
++            const repoElapsed = formatDurationMs(Date.now() - repoStartedAt);
++            const engineSuffix = extraction.siphonEngines
++              ? ` and siphoned ${res.engines.length} full unredacted engine(s)`
++              : '';
++            if (res.commits.length === 0 && author.trim()) {
++              appendLog(
++                `0 commits matched author "${author}" in ${repo.full_name}${engineSuffix} (${repoElapsed}; clear author filter to pull all authors).`,
++                'info'
++              );
++            } else {
++              appendLog(
++                `Scanned ${repo.full_name}: ${res.commits.length} unique commits across ${res.branchCount} branch(es)${engineSuffix} in ${repoElapsed}.`,
++                'info'
++              );
++            }
++          } catch (err) {
++            const msg = err instanceof Error ? err.message : String(err);
++            if (controller.signal.aborted || msg === 'Operation cancelled.') {
++              throw err;
++            }
++            scannedRepos += 1;
++            appendLog(`Error scanning ${repo.full_name}: ${msg}`, 'warn');
++            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
++              throw new Error('Network went offline during repository scan.');
++            }
++          }
++
++          if (repoIndex + 1 < totalRepos) {
++            const interRepoMs = verifiedToken ? 400 : 1200;
++            setTaskTimer({
++              label: 'GitHub rate-limit cooldown',
++              detail: `Next: ${repos[repoIndex + 1].full_name}`,
++              runStartedAt,
++              itemStartedAt: Date.now(),
++            });
++            await sleepWithAbort(interRepoMs, controller.signal);
++          }
++        }
++
++        mergedCommits.sort((a, b) => (b.date > a.date ? 1 : -1));
++
++        if (extraction.ciLookup && mergedCommits.length > 0) {
++          const ciStartedAt = Date.now();
++          appendLog(`Checking CI status across all ${mergedCommits.length} commits...`, 'info');
++          for (let i = 0; i < mergedCommits.length; i += 1) {
++            if (controller.signal.aborted) throw new Error('Operation cancelled.');
++            const target = mergedCommits[i];
++            setTaskTimer({
++              label: 'Checking CI results',
++              detail: `${i + 1} / ${mergedCommits.length} · ${target.repo} (${target.sha.slice(0, 7)})`,
++              runStartedAt,
++              itemStartedAt: ciStartedAt,
++            });
++            target.ciState = await lookupCommitCiState(
++              verifiedToken,
++              target.repo,
++              target.sha,
++              controller.signal,
++              appendLog
++            );
++            if (i + 1 < mergedCommits.length) {
++              await sleepWithAbort(verifiedToken ? 250 : 900, controller.signal);
++            }
++          }
++        }
++      }
++
++      setProgressPct(72);
++      const classified = await classifyAndOrchestrate(
++        mergedCommits,
++        extraction,
++        appendLog,
++        controller.signal,
++        (stageLabel, stageDetail, resetItemTimer = true) => {
++          setTaskTimer((prev) => ({
++            label: stageLabel,
++            detail: stageDetail,
++            runStartedAt,
++            itemStartedAt: resetItemTimer ? Date.now() : prev?.itemStartedAt ?? Date.now(),
++          }));
++        }
++      );
++
++      setCommits(classified);
++      setEngines(mergedEngines);
++      setProgressPct(100);
++      const totalElapsedMs = Date.now() - runStartedAt;
++      const okTotal = classified.filter((c) => c.classification === 'successful').length;
++      const failTotal = classified.length - okTotal;
++      appendLog(
++        `Archive compiled in ${formatDurationMs(totalElapsedMs)}: ${okTotal} successful, ${failTotal} failed, ${mergedEngines.length} full engines across ${scannedRepos} repositories.`,
++        'success'
++      );
++      addToast(
++        `Compiled ${classified.length} commits & ${mergedEngines.length} full engines in ${formatDurationMs(totalElapsedMs)}.`,
++        'success'
++      );
++      void persistSnapshot(
++        {
++          reposScanned: scannedRepos,
++          reposTotal: totalRepos,
++          branchesScanned: totalBranches,
++          uniqueCommits: classified.length,
++          enginesSiphoned: mergedEngines.length,
++          combinedBytes: 0,
++        },
++        classified,
++        mergedEngines,
++        logs
++      );
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      appendLog(`Extraction stopped: ${msg}`, 'error');
++
++      // Always preserve partial commits & unredacted engines harvested before interruption/offline
++      if (mergedCommits.length > 0 || mergedEngines.length > 0) {
++        const offlineFallbackSettings: ExtractionSettings = {
++          ...extraction,
++          useGemini: false,
++          useLlm: false,
++        };
++        const partialClassified = await classifyAndOrchestrate(
++          mergedCommits,
++          offlineFallbackSettings,
++          appendLog
++        );
++        setCommits(partialClassified);
++        setEngines(mergedEngines);
++        const partialStats: FetchStats = {
++          reposScanned: scannedRepos,
++          reposTotal: totalRepos,
++          branchesScanned: totalBranches,
++          uniqueCommits: partialClassified.length,
++          enginesSiphoned: mergedEngines.length,
++          combinedBytes: 0,
++        };
++        setStats(partialStats);
++        appendLog(
++          `Preserved partial offline archive: ${partialClassified.length} commits and ${mergedEngines.length} full unredacted engines saved locally.`,
++          'warn'
++        );
++        addToast(
++          `Saved ${partialClassified.length} commits & ${mergedEngines.length} engines collected before interruption.`,
++          'warning'
++        );
++        void persistSnapshot(partialStats, partialClassified, mergedEngines, logs);
++      } else {
++        addToast(msg, 'error');
++      }
++    } finally {
++      setLastRunDurationMs(Date.now() - runStartedAt);
++      setTaskTimer(null);
++      setIsFetching(false);
++      abortRef.current = null;
++    }
++  };
++
++  const handleStop = () => {
++    abortRef.current?.abort();
++    appendLog('Cancelling active extraction...', 'warn');
++  };
++
++  const handleTestGemini = async () => {
++    if (isOffline) {
++      setGeminiStatusText('Offline — cannot reach Gemini server endpoint.');
++      addToast('Offline mode active.', 'warning');
++      return;
++    }
++    setIsTestingGemini(true);
++    setGeminiStatusText('Testing...');
++    try {
++      const result = await testGeminiConnection(extraction.useGeminiBackup);
++      const summary = result.usedBackup
++        ? `${result.model} (backup active) — ${result.primaryError || 'primary unavailable'}`
++        : `${result.model}: ${result.status}`;
++      setGeminiStatusText(summary);
++      if (result.usedBackup) {
++        appendLog(
++          `Primary gemini-4-carbon unavailable; verified backup model ${result.model}.`,
++          'warn'
++        );
++        addToast(`Backup model ${result.model} is ready.`, 'warning');
++      } else {
++        appendLog(`Gemini connection verified (${result.model} · ThinkingLevel.HIGH).`, 'success');
++        addToast(`Gemini ${result.model} is ready.`, 'success');
++      }
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      setGeminiStatusText(msg);
++      appendLog(`Gemini connection test failed: ${msg}`, 'error');
++      addToast(msg, 'error');
++    } finally {
++      setIsTestingGemini(false);
++    }
++  };
++
++  const handleTestNvidia = async () => {
++    if (isOffline) {
++      setNvidiaStatusText('Offline — cannot reach NVIDIA NIM relay.');
++      addToast('Offline mode active.', 'warning');
++      return;
++    }
++    setIsTestingNvidia(true);
++    setNvidiaStatusText('Testing...');
++    try {
++      const result = await testNvidiaConnection({
++        nvKey: extraction.nvKey,
++        nvModel: extraction.nvModel,
++        nvEndpoint: extraction.nvEndpoint,
++      });
++      setNvidiaStatusText(`${result.model}: ${result.status}`);
++      appendLog(`NVIDIA NIM proxy verified (${result.model}).`, 'success');
++      addToast(`NVIDIA NIM (${result.model}) is ready.`, 'success');
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      setNvidiaStatusText(msg);
++      appendLog(`NVIDIA NIM test failed: ${msg}`, 'error');
++      addToast(msg, 'error');
++    } finally {
++      setIsTestingNvidia(false);
++    }
++  };
++
++  const handlePushToGitHub = async () => {
++    if (isOffline) {
++      addToast('Cannot push to GitHub while offline. Use Download all to export locally.', 'warning');
++      return;
++    }
++    try {
++      validateDestination(destination.targetRepo, destination.targetBranch, destination.targetPath);
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      addToast(msg, 'warning');
++      return;
++    }
++
++    if (isDemo || !verifiedToken) {
++      addToast('Verify a GitHub token with the repo scope to push archives to GitHub.', 'warning');
++      return;
++    }
++
++    const files = [
++      { path: filenames.successful, content: splitArchives.successful, label: 'successful' },
++      { path: filenames.failed, content: splitArchives.failed, label: 'failed' },
++      ...(engines.length > 0
++        ? [{ path: filenames.engines, content: splitArchives.engines, label: 'engines' }]
++        : []),
++    ];
++
++    setIsPushing(true);
++    appendLog(
++      `Pushing ${files.length} archive file(s) to ${destination.targetRepo}@${destination.targetBranch}...`,
++      'info'
++    );
++    try {
++      await pushSplitArchivesToGitHub(
++        verifiedToken,
++        {
++          repo: destination.targetRepo.trim(),
++          branch: destination.targetBranch.trim(),
++          autoCreatePrivate: destination.autoCreateRepo,
++          files,
++        },
++        appendLog
++      );
++      addToast(`Pushed ${files.length} archive file(s) to ${destination.targetRepo}.`, 'success');
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : String(err);
++      appendLog(`Push failed: ${msg}`, 'error');
++      addToast(`Push failed: ${msg}`, 'error');
++    } finally {
++      setIsPushing(false);
++    }
++  };
++
++  const handleCopy = async () => {
++    if (commits.length === 0 && engines.length === 0) return;
++    const text = splitArchives[activeBucket];
++    try {
++      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
++        await navigator.clipboard.writeText(text);
++        addToast(`Copied the ${activeBucket} archive to clipboard.`, 'success');
++      } else {
++        throw new Error('Clipboard API unavailable');
++      }
++    } catch {
++      addToast('Clipboard access was blocked in this context.', 'warning');
++    }
++  };
++
++  const handleCopyEngineSource = async (engine: SiphonedEngine) => {
++    try {
++      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
++        await navigator.clipboard.writeText(engine.fullCode);
++        addToast(`Copied full unredacted source of ${engine.filePath}.`, 'success');
++      } else {
++        throw new Error('Clipboard API unavailable');
++      }
++    } catch {
++      addToast('Clipboard access was blocked in this context.', 'warning');
++    }
++  };
++
++  const handleDownloadAll = () => {
++    if (commits.length === 0 && engines.length === 0) return;
++    const mimeMap = {
++      json: 'application/json',
++      markdown: 'text/markdown',
++      csv: 'text/csv',
++    };
++    const mime = mimeMap[destination.fileFormat];
++
++    const triggerDownload = (content: string, filename: string) => {
++      const blob = new Blob([content], { type: `${mime};charset=utf-8` });
++      const url = URL.createObjectURL(blob);
++      const a = document.createElement('a');
++      a.href = url;
++      a.download = filename.split('/').pop() || filename;
++      document.body.appendChild(a);
++      a.click();
++      a.remove();
++      URL.revokeObjectURL(url);
++    };
++
++    triggerDownload(splitArchives.successful, filenames.successful);
++    window.setTimeout(() => {
++      triggerDownload(splitArchives.failed, filenames.failed);
++    }, 150);
++    if (engines.length > 0) {
++      window.setTimeout(() => {
++        triggerDownload(splitArchives.engines, filenames.engines);
++      }, 300);
++    }
++
++    addToast(
++      engines.length > 0
++        ? 'Downloaded successful, failed, and full engines archives.'
++        : 'Downloaded both successful and failed archive files.',
++      'success'
++    );
++  };
++
++  const repoCountHint = user
++    ? isDemo
++      ? `${DEMO_REPOS.length} demo repos`
++      : `${user.public_repos ?? 0} public · ${user.total_private_repos ?? 0} private`
++    : '';
++
++  return (
++    <div id="top" className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
++      <TopBar
++        connectedLogin={user?.login ?? null}
++        isDemo={isDemo}
++        isFetching={isFetching}
++        onLoadDemo={() => void handleLoadDemo()}
++      />
++
++      <ToastStack toasts={toasts} onDismiss={dismissToast} />
++
++      <main className="flex-grow max-w-[1360px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
++        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-slate-800/80 pb-6">
++          <div>
++            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white text-balance">
++              Dual-LLM Commit History &amp; Footprint Classifier
++            </h1>
++            <p className="text-sm text-slate-400 mt-1.5 max-w-2xl leading-relaxed">
++              Aggregate multi-branch GitHub commits and full unredacted runtime engines in one pass, classify outcomes with Gemini 4 Carbon High Thinking &amp; NVIDIA NIM (with automatic offline &amp; quota heuristic fallback), and push split archives to V1.
++            </p>
++          </div>
++          <p className="text-xs font-mono text-slate-400 shrink-0">
++            Target: {filenames.successful} · {filenames.failed} · {filenames.engines}
++          </p>
++        </div>
++
++        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
++          <div className="lg:col-span-5 space-y-6">
++            <CredentialsPanel
++              token={token}
++              onTokenChange={handleTokenInputChange}
++              onVerify={() => void handleVerifyToken()}
++              isVerifying={isVerifying}
++              user={user}
++              isDemo={isDemo}
++              repoCountHint={repoCountHint}
++            />
++
++            <ExtractionPanel
++              settings={extraction}
++              onChange={handleExtractionChange}
++              canFetch={Boolean(user) || hasExternalSources}
++              isFetching={isFetching}
++              isOffline={isOffline}
++              hasLocalData={commits.length > 0 || engines.length > 0}
++              onFetch={() => void handleFetchAndClassify()}
++              onReclassifyOffline={() => void handleReclassifyOffline()}
++              onStop={handleStop}
++              onTestGemini={handleTestGemini}
++              onTestNvidia={handleTestNvidia}
++              isTestingGemini={isTestingGemini}
++              isTestingNvidia={isTestingNvidia}
++              geminiStatusText={geminiStatusText}
++              nvidiaStatusText={nvidiaStatusText}
++            />
++
++            <DestinationPanel
++              settings={destination}
++              onChange={handleDestinationChange}
++              canPush={(commits.length > 0 || engines.length > 0) && Boolean(user)}
++              isPushing={isPushing}
++              onPush={() => void handlePushToGitHub()}
++            />
++          </div>
++
++          <div className="lg:col-span-7 lg:sticky lg:top-24">
++            <WorkspaceOutput
++              stats={stats}
++              progressPct={progressPct}
++              isFetching={isFetching}
++              taskTimer={taskTimer}
++              lastRunDurationMs={lastRunDurationMs}
++              logs={logs}
++              onClearLogs={() => setLogs([])}
++              commits={commits}
++              engines={engines}
++              outputs={{
++                successful: splitArchives.successful,
++                failed: splitArchives.failed,
++                engines: splitArchives.engines,
++              }}
++              filenames={filenames}
++              activeBucket={activeBucket}
++              onBucketChange={setActiveBucket}
++              onCopy={() => void handleCopy()}
++              onCopyEngineSource={(eng) => void handleCopyEngineSource(eng)}
++              onDownloadAll={handleDownloadAll}
++            />
++          </div>
++        </div>
++      </main>
++    </div>
++  );
++}
+diff --git a/src/components/CredentialsPanel.tsx b/src/components/CredentialsPanel.tsx
+new file mode 100644
+index 0000000..7b718c2
+--- /dev/null
++++ b/src/components/CredentialsPanel.tsx
+@@ -0,0 +1,138 @@
++import { useState } from 'react';
++import { ExternalLink, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
++import type { GitHubUser } from '../types/git';
++
++interface CredentialsPanelProps {
++  token: string;
++  onTokenChange: (val: string) => void;
++  onVerify: () => void;
++  isVerifying: boolean;
++  user: GitHubUser | null;
++  isDemo: boolean;
++  repoCountHint: string;
++}
++
++export function CredentialsPanel({
++  token,
++  onTokenChange,
++  onVerify,
++  isVerifying,
++  user,
++  isDemo,
++  repoCountHint,
++}: CredentialsPanelProps) {
++  const [showToken, setShowToken] = useState(false);
++
++  return (
++    <section
++      id="credentials"
++      aria-labelledby="heading-credentials"
++      className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 scroll-mt-20"
++    >
++      <div className="flex items-center justify-between gap-4 mb-4">
++        <h2
++          id="heading-credentials"
++          className="text-base font-semibold text-white flex items-center gap-2.5"
++        >
++          <span className="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-400 text-xs font-bold font-mono tabular-nums">
++            1
++          </span>
++          GitHub credentials
++        </h2>
++        <a
++          href="https://github.com/settings/tokens/new?scopes=repo&description=GitHistory%20Sync"
++          target="_blank"
++          rel="noopener noreferrer"
++          className="text-xs text-sky-400 hover:text-sky-300 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
++        >
++          Create token
++          <ExternalLink className="w-3 h-3" aria-hidden="true" />
++        </a>
++      </div>
++
++      <div className="space-y-4">
++        <div>
++          <label htmlFor="ghToken" className="block text-xs font-medium text-slate-300 mb-1.5">
++            Personal access token (classic or fine-grained)
++          </label>
++          <div className="relative">
++            <input
++              id="ghToken"
++              type={showToken ? 'text' : 'password'}
++              value={token}
++              onChange={(e) => onTokenChange(e.target.value)}
++              onKeyDown={(e) => {
++                if (e.key === 'Enter' && !isVerifying) {
++                  e.preventDefault();
++                  onVerify();
++                }
++              }}
++              autoComplete="off"
++              spellCheck={false}
++              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 pr-10 text-sm text-white placeholder-slate-600 font-mono focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
++            />
++            <button
++              type="button"
++              onClick={() => setShowToken((prev) => !prev)}
++              aria-label={showToken ? 'Hide token' : 'Show token'}
++              className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-r-lg"
++            >
++              {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
++            </button>
++          </div>
++          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
++            Needs the <code className="text-slate-300 bg-slate-800 px-1 py-0.5 rounded font-mono">repo</code> scope to read private repositories and push archives. Held in memory only.
++          </p>
++        </div>
++
++        <button
++          type="button"
++          onClick={onVerify}
++          disabled={isVerifying}
++          className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++        >
++          {isVerifying ? (
++            <>
++              <Loader2 className="w-4 h-4 animate-spin text-emerald-400" aria-hidden="true" />
++              Verifying account...
++            </>
++          ) : (
++            <>
++              <ShieldCheck className="w-4 h-4 text-emerald-400" aria-hidden="true" />
++              Verify and load account
++            </>
++          )}
++        </button>
++
++        {user && (
++          <div className="pt-4 border-t border-slate-800 flex items-center gap-3">
++            {user.avatar_url ? (
++              <img
++                src={user.avatar_url}
++                alt={`${user.login} avatar`}
++                referrerPolicy="no-referrer"
++                className="w-10 h-10 rounded-full border border-slate-700 object-cover shrink-0"
++              />
++            ) : (
++              <div
++                aria-hidden="true"
++                className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-mono font-semibold text-emerald-400 shrink-0"
++              >
++                {user.login.slice(0, 2).toUpperCase()}
++              </div>
++            )}
++            <div className="min-w-0 flex-1">
++              <p className="text-sm font-semibold text-white truncate">
++                {user.name || user.login} · <span className="font-mono text-emerald-400">@{user.login}</span>
++              </p>
++              <p className="text-xs text-slate-400 truncate">
++                {isDemo ? 'Demo workspace active' : 'Live GitHub session'} · {repoCountHint}
++              </p>
++            </div>
++          </div>
++        )}
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/DestinationPanel.tsx b/src/components/DestinationPanel.tsx
+new file mode 100644
+index 0000000..63fa1de
+--- /dev/null
++++ b/src/components/DestinationPanel.tsx
+@@ -0,0 +1,127 @@
++import { Loader2, UploadCloud } from 'lucide-react';
++import type { ArchiveFormat, DestinationSettings } from '../types/git';
++
++interface DestinationPanelProps {
++  settings: DestinationSettings;
++  onChange: <K extends keyof DestinationSettings>(key: K, value: DestinationSettings[K]) => void;
++  canPush: boolean;
++  isPushing: boolean;
++  onPush: () => void;
++}
++
++export function DestinationPanel({
++  settings,
++  onChange,
++  canPush,
++  isPushing,
++  onPush,
++}: DestinationPanelProps) {
++  return (
++    <section
++      id="destination"
++      aria-labelledby="heading-destination"
++      className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 scroll-mt-20"
++    >
++      <h2
++        id="heading-destination"
++        className="text-base font-semibold text-white flex items-center gap-2.5 mb-5"
++      >
++        <span className="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-400 text-xs font-bold font-mono tabular-nums">
++          3
++        </span>
++        Destination repository
++      </h2>
++
++      <div className="space-y-4">
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
++          <div>
++            <label htmlFor="targetRepo" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Repository
++            </label>
++            <input
++              id="targetRepo"
++              type="text"
++              value={settings.targetRepo}
++              onChange={(e) => onChange('targetRepo', e.target.value)}
++              placeholder="owner/repo"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++          <div>
++            <label htmlFor="targetBranch" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Branch
++            </label>
++            <input
++              id="targetBranch"
++              type="text"
++              value={settings.targetBranch}
++              onChange={(e) => onChange('targetBranch', e.target.value)}
++              placeholder="main"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++        </div>
++
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
++          <div>
++            <label htmlFor="targetPath" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Base file path
++            </label>
++            <input
++              id="targetPath"
++              type="text"
++              value={settings.targetPath}
++              onChange={(e) => onChange('targetPath', e.target.value)}
++              placeholder="memory/commit-history.json"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++          <div>
++            <label htmlFor="fileFormat" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Format
++            </label>
++            <select
++              id="fileFormat"
++              value={settings.fileFormat}
++              onChange={(e) => onChange('fileFormat', e.target.value as ArchiveFormat)}
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
++            >
++              <option value="json">JSON (.json)</option>
++              <option value="markdown">Markdown (.md)</option>
++              <option value="csv">CSV (.csv)</option>
++            </select>
++          </div>
++        </div>
++
++        <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300">
++          <input
++            type="checkbox"
++            checked={settings.autoCreateRepo}
++            onChange={(e) => onChange('autoCreateRepo', e.target.checked)}
++            className="w-4 h-4 rounded accent-emerald-500"
++          />
++          <span>Create a private repo if it does not exist</span>
++        </label>
++
++        <button
++          type="button"
++          onClick={onPush}
++          disabled={!canPush || isPushing}
++          className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition-colors whitespace-nowrap disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
++        >
++          {isPushing ? (
++            <>
++              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
++              Pushing archives...
++            </>
++          ) : (
++            <>
++              <UploadCloud className="w-4 h-4" aria-hidden="true" />
++              Push archive files to GitHub
++            </>
++          )}
++        </button>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/ExtractionPanel.tsx b/src/components/ExtractionPanel.tsx
+new file mode 100644
+index 0000000..c51668c
+--- /dev/null
++++ b/src/components/ExtractionPanel.tsx
+@@ -0,0 +1,550 @@
++import { useState } from 'react';
++import { ChevronDown, Cpu, DownloadCloud, ListPlus, Loader2, Square, WifiOff } from 'lucide-react';
++import type { AiStrategy, BranchScope, ExtractionSettings } from '../types/git';
++import { CURATED_PRESETS, appendPresetToSources } from '../utils/sources';
++
++interface ExtractionPanelProps {
++  settings: ExtractionSettings;
++  onChange: <K extends keyof ExtractionSettings>(key: K, value: ExtractionSettings[K]) => void;
++  canFetch: boolean;
++  isFetching: boolean;
++  isOffline: boolean;
++  hasLocalData: boolean;
++  onFetch: () => void;
++  onReclassifyOffline: () => void;
++  onStop: () => void;
++  onTestGemini: () => Promise<void>;
++  onTestNvidia: () => Promise<void>;
++  isTestingGemini: boolean;
++  isTestingNvidia: boolean;
++  geminiStatusText: string | null;
++  nvidiaStatusText: string | null;
++}
++
++export function ExtractionPanel({
++  settings,
++  onChange,
++  canFetch,
++  isFetching,
++  isOffline,
++  hasLocalData,
++  onFetch,
++  onReclassifyOffline,
++  onStop,
++  onTestGemini,
++  onTestNvidia,
++  isTestingGemini,
++  isTestingNvidia,
++  geminiStatusText,
++  nvidiaStatusText,
++}: ExtractionPanelProps) {
++  const [selectedPreset, setSelectedPreset] = useState('');
++
++  const handleAddPreset = () => {
++    if (!selectedPreset) return;
++    onChange('sources', appendPresetToSources(settings.sources, [selectedPreset]));
++    setSelectedPreset('');
++  };
++
++  const handleSelectAllCurated = () => {
++    onChange(
++      'sources',
++      appendPresetToSources(
++        settings.sources,
++        CURATED_PRESETS.map((p) => p.value)
++      )
++    );
++  };
++
++  const handleStrategyChange = (strategy: AiStrategy) => {
++    onChange('aiStrategy', strategy);
++    if (strategy === 'gemini_only') {
++      onChange('useGemini', true);
++      onChange('useLlm', false);
++    } else if (strategy === 'nvidia_only') {
++      onChange('useGemini', false);
++      onChange('useLlm', true);
++    } else {
++      onChange('useGemini', true);
++      onChange('useLlm', true);
++    }
++  };
++
++  return (
++    <section
++      id="extraction"
++      aria-labelledby="heading-extraction"
++      className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6 scroll-mt-20"
++    >
++      <h2
++        id="heading-extraction"
++        className="text-base font-semibold text-white flex items-center gap-2.5 mb-5"
++      >
++        <span className="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 text-emerald-400 text-xs font-bold font-mono tabular-nums">
++          2
++        </span>
++        Extraction &amp; AI classification
++      </h2>
++
++      <div className="space-y-5">
++        <div>
++          <label htmlFor="authorFilter" className="block text-xs font-medium text-slate-300 mb-1.5">
++            Author for my repositories (optional)
++          </label>
++          <input
++            id="authorFilter"
++            type="text"
++            value={settings.authorFilter}
++            onChange={(e) => onChange('authorFilter', e.target.value)}
++            placeholder="Filled with your GitHub username"
++            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
++          />
++          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
++            Blank pulls everyone&apos;s commits in your repositories. Use your username to keep only yours.
++          </p>
++        </div>
++
++        {/* Curated Sources */}
++        <div className="pt-4 border-t border-slate-800 space-y-2.5">
++          <div className="flex items-center justify-between gap-2">
++            <label htmlFor="curatedPresetSelect" className="text-xs font-medium text-emerald-400">
++              Curated GitHub sources ({CURATED_PRESETS.length})
++            </label>
++            <button
++              type="button"
++              onClick={handleSelectAllCurated}
++              className="px-2.5 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-700/50 text-xs font-medium text-emerald-300 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++            >
++              <ListPlus className="w-3.5 h-3.5" aria-hidden="true" />
++              Select all ({CURATED_PRESETS.length})
++            </button>
++          </div>
++
++          <div className="flex gap-2">
++            <select
++              id="curatedPresetSelect"
++              value={selectedPreset}
++              onChange={(e) => setSelectedPreset(e.target.value)}
++              className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
++            >
++              <option value="">-- Add individual preset or click Select all --</option>
++              {CURATED_PRESETS.map((preset) => (
++                <option key={preset.value} value={preset.value}>
++                  {preset.label}
++                </option>
++              ))}
++            </select>
++            <button
++              type="button"
++              onClick={handleAddPreset}
++              disabled={!selectedPreset}
++              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++            >
++              Add
++            </button>
++          </div>
++
++          <p className="text-xs text-slate-400 pt-0.5 leading-relaxed">
++            Single-pass unlimited extraction: pulls commit history and siphons full, unredacted runtime engines together with no duplicate repo crawl.
++          </p>
++        </div>
++
++        <div>
++          <label htmlFor="sources" className="block text-xs font-medium text-slate-300 mb-1.5">
++            Also pull from other people (optional)
++          </label>
++          <textarea
++            id="sources"
++            rows={2}
++            spellCheck={false}
++            value={settings.sources}
++            onChange={(e) => onChange('sources', e.target.value)}
++            placeholder="torvalds, vercel/next.js, https://github.com/anthropics"
++            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
++          />
++          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
++            Username/org pulls all public repos; <span className="font-mono text-slate-300">owner/repo</span> pulls one. Separate with commas or newlines.
++          </p>
++        </div>
++
++        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
++          <div>
++            <label htmlFor="extAuthor" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Author for external sources
++            </label>
++            <input
++              id="extAuthor"
++              type="text"
++              value={settings.extAuthor}
++              onChange={(e) => onChange('extAuthor', e.target.value)}
++              placeholder="Blank = every author"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++          <div>
++            <label htmlFor="repoFilter" className="block text-xs font-medium text-slate-300 mb-1.5">
++              Only repos matching
++            </label>
++            <input
++              id="repoFilter"
++              type="text"
++              value={settings.repoFilter}
++              onChange={(e) => onChange('repoFilter', e.target.value)}
++              placeholder="V1, ragflow, my-org/"
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++        </div>
++
++        <div className="grid grid-cols-2 gap-3">
++          <div>
++            <label htmlFor="sinceDate" className="block text-xs font-medium text-slate-300 mb-1.5">
++              From
++            </label>
++            <input
++              id="sinceDate"
++              type="date"
++              value={settings.sinceDate}
++              onChange={(e) => onChange('sinceDate', e.target.value)}
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++          <div>
++            <label htmlFor="untilDate" className="block text-xs font-medium text-slate-300 mb-1.5">
++              To
++            </label>
++            <input
++              id="untilDate"
++              type="date"
++              value={settings.untilDate}
++              onChange={(e) => onChange('untilDate', e.target.value)}
++              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
++            />
++          </div>
++        </div>
++
++        <div>
++          <label htmlFor="branchScope" className="block text-xs font-medium text-slate-300 mb-1.5">
++            Branch scope
++          </label>
++          <select
++            id="branchScope"
++            value={settings.branchScope}
++            onChange={(e) => onChange('branchScope', e.target.value as BranchScope)}
++            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
++          >
++            <option value="all">All branches (full multi-branch history)</option>
++            <option value="default">Default branch only (e.g. main)</option>
++            <option value="first">First branch only (e.g. Original on V1)</option>
++          </select>
++        </div>
++
++        <label className="flex items-start gap-2.5 p-3 rounded-lg bg-sky-950/30 border border-sky-800/60 cursor-pointer hover:border-sky-700 text-xs text-slate-200 transition-colors">
++          <input
++            type="checkbox"
++            checked={settings.siphonEngines}
++            onChange={(e) => onChange('siphonEngines', e.target.checked)}
++            className="w-4 h-4 mt-0.5 rounded accent-sky-500 bg-slate-900 border-slate-700 shrink-0"
++          />
++          <div>
++            <span className="font-semibold text-sky-300 block">
++              Siphon full unredacted engines in single pass
++            </span>
++            <span className="text-slate-400 leading-relaxed block mt-0.5">
++              Harvests core runtime engines verbatim (zero redaction, no snippet truncation) during commit extraction and cross-links commit SHAs.
++            </span>
++          </div>
++        </label>
++
++        <div className="grid grid-cols-2 gap-2.5">
++          {[
++            { key: 'includePrivate' as const, label: 'Private repos' },
++            { key: 'includeForks' as const, label: 'Include forks' },
++            { key: 'skipOwn' as const, label: 'Skip archive commits' },
++            { key: 'includeEmails' as const, label: 'Include emails' },
++            { key: 'includeMine' as const, label: 'My repositories' },
++            { key: 'ciLookup' as const, label: 'Check CI results' },
++          ].map((item) => (
++            <label
++              key={item.key}
++              className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300 transition-colors"
++            >
++              <input
++                type="checkbox"
++                checked={settings[item.key]}
++                onChange={(e) => onChange(item.key, e.target.checked)}
++                className="w-4 h-4 rounded accent-emerald-500 bg-slate-900 border-slate-700"
++              />
++              <span>{item.label}</span>
++            </label>
++          ))}
++        </div>
++
++        {/* Dual-LLM Review Section */}
++        <details open className="pt-4 border-t border-slate-800 text-xs text-slate-300 group">
++          <summary className="cursor-pointer font-semibold text-emerald-400 flex items-center justify-between list-none">
++            <span>Dual-LLM review (Gemini 4 Carbon + NVIDIA NIM)</span>
++            <ChevronDown className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" />
++          </summary>
++
++          <div className="space-y-4 mt-4">
++            <div>
++              <label htmlFor="aiStrategy" className="block text-xs font-medium text-slate-300 mb-1.5">
++                Orchestration strategy
++              </label>
++              <select
++                id="aiStrategy"
++                value={settings.aiStrategy}
++                onChange={(e) => handleStrategyChange(e.target.value as AiStrategy)}
++                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
++              >
++                <option value="consensus">
++                  Consensus + Tie-Breaker (Both audit ambiguous commits; disagreements escalate)
++                </option>
++                <option value="specialist">
++                  Specialist Split (Gemini audits feature signals; NVIDIA audits regression risk)
++                </option>
++                <option value="gemini_only">
++                  Gemini 4 Carbon Only (High Thinking server-side audit)
++                </option>
++                <option value="nvidia_only">
++                  NVIDIA NIM Only (Proxy relay)
++                </option>
++              </select>
++            </div>
++
++            <div className="grid grid-cols-2 gap-2.5">
++              <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300">
++                <input
++                  type="checkbox"
++                  checked={settings.useGemini}
++                  onChange={(e) => onChange('useGemini', e.target.checked)}
++                  className="w-4 h-4 rounded accent-emerald-500"
++                />
++                <span>Enable Gemini 4 Carbon</span>
++              </label>
++              <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300">
++                <input
++                  type="checkbox"
++                  checked={settings.useLlm}
++                  onChange={(e) => onChange('useLlm', e.target.checked)}
++                  className="w-4 h-4 rounded accent-emerald-500"
++                />
++                <span>Enable NVIDIA NIM</span>
++              </label>
++            </div>
++
++            {/* Gemini 4 Carbon + Lite Backup Server-Side Config */}
++            <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
++              <div className="flex flex-wrap items-center justify-between gap-2">
++                <span className="font-semibold text-sky-400 whitespace-nowrap">Gemini 4 Carbon</span>
++                <span className="text-xs font-mono text-slate-400 whitespace-nowrap">
++                  High Thinking · Lite Backup
++                </span>
++              </div>
++              <p className="text-xs text-slate-400 leading-relaxed">
++                Uses server-side <code className="font-mono text-slate-300">gemini-4-carbon</code> (<code className="font-mono text-slate-300">ThinkingLevel.HIGH</code>) with automatic fallback to <code className="font-mono text-slate-300">gemini-3.1-flash-lite</code> if primary quota or service fails.
++              </p>
++              <label className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300">
++                <input
++                  type="checkbox"
++                  checked={settings.useGeminiBackup}
++                  onChange={(e) => onChange('useGeminiBackup', e.target.checked)}
++                  className="w-4 h-4 rounded accent-emerald-500"
++                />
++                <span>Use <code className="font-mono text-slate-200">gemini-3.1-flash-lite</code> as automatic backup</span>
++              </label>
++              <div className="space-y-2">
++                <button
++                  type="button"
++                  onClick={onTestGemini}
++                  disabled={isTestingGemini}
++                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs font-medium text-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++                >
++                  {isTestingGemini && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
++                  Test Gemini connection
++                </button>
++                {geminiStatusText && (
++                  <p className="text-xs font-mono text-slate-300 leading-relaxed break-words">
++                    {geminiStatusText}
++                  </p>
++                )}
++              </div>
++            </div>
++
++            {/* NVIDIA NIM Proxy Config */}
++            <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
++              <div className="flex flex-wrap items-center justify-between gap-2">
++                <span className="font-semibold text-emerald-400 whitespace-nowrap">NVIDIA NIM</span>
++                <span className="text-xs font-mono text-slate-400 whitespace-nowrap">Built-in server relay</span>
++              </div>
++              <div>
++                <label htmlFor="nvKey" className="block text-xs font-medium text-slate-300 mb-1">
++                  NVIDIA NIM token (optional if configured in server env)
++                </label>
++                <input
++                  id="nvKey"
++                  type="password"
++                  value={settings.nvKey}
++                  onChange={(e) => onChange('nvKey', e.target.value)}
++                  autoComplete="off"
++                  spellCheck={false}
++                  placeholder="nvapi-... (from build.nvidia.com)"
++                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
++                />
++              </div>
++              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
++                <div>
++                  <label htmlFor="nvModel" className="block text-xs font-medium text-slate-300 mb-1">
++                    Model ID
++                  </label>
++                  <input
++                    id="nvModel"
++                    type="text"
++                    list="nvModels"
++                    value={settings.nvModel}
++                    onChange={(e) => onChange('nvModel', e.target.value)}
++                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
++                  />
++                  <datalist id="nvModels">
++                    <option value="nvidia/nemotron-3.5-bolt-e4b" />
++                    <option value="nvidia/nemotron-3.5-lightning-30b-a3b" />
++                    <option value="poolside/laguna-xs-2.1" />
++                    <option value="stepfun-ai/step-5-preview" />
++                    <option value="z-ai/glm-5.3-flash" />
++                  </datalist>
++                </div>
++                <div>
++                  <label htmlFor="nvEndpoint" className="block text-xs font-medium text-slate-300 mb-1">
++                    Relay endpoint
++                  </label>
++                  <input
++                    id="nvEndpoint"
++                    type="text"
++                    value={settings.nvEndpoint}
++                    onChange={(e) => onChange('nvEndpoint', e.target.value)}
++                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
++                  />
++                </div>
++              </div>
++              <div className="space-y-2">
++                <button
++                  type="button"
++                  onClick={onTestNvidia}
++                  disabled={isTestingNvidia}
++                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-xs font-medium text-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++                >
++                  {isTestingNvidia && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
++                  Test NVIDIA proxy connection
++                </button>
++                {nvidiaStatusText && (
++                  <p className="text-xs font-mono text-slate-300 leading-relaxed break-words">
++                    {nvidiaStatusText}
++                  </p>
++                )}
++              </div>
++            </div>
++
++            <div className="pt-2 border-t border-slate-800/80">
++              <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-950 border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-300">
++                <input
++                  type="checkbox"
++                  checked={settings.nvPrivate}
++                  onChange={(e) => onChange('nvPrivate', e.target.checked)}
++                  className="w-4 h-4 rounded accent-emerald-500"
++                />
++                <span>Send private repository commit messages to AI review</span>
++              </label>
++            </div>
++            <p className="text-xs text-slate-400 leading-relaxed">
++              Every ambiguous commit across the full history is reviewed automatically. In <strong className="text-slate-200">Consensus + Tie-Breaker</strong> mode, matching verdicts upgrade to{' '}
++              <span className="text-emerald-400 font-mono">high</span> confidence while disagreements escalate to Gemini 4 Carbon High Thinking.
++            </p>
++          </div>
++        </details>
++
++        {/* Heuristic Rules */}
++        <details className="pt-4 border-t border-slate-800 text-xs text-slate-300 group">
++          <summary className="cursor-pointer font-medium text-slate-300 flex items-center justify-between list-none">
++            <span>Heuristic classification rules</span>
++            <ChevronDown className="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform" />
++          </summary>
++          <div className="space-y-3 mt-3">
++            <div>
++              <label htmlFor="failRx" className="block text-xs font-medium text-slate-300 mb-1">
++                Failure message pattern (regex)
++              </label>
++              <input
++                id="failRx"
++                type="text"
++                value={settings.failRx}
++                onChange={(e) => onChange('failRx', e.target.value)}
++                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
++              />
++            </div>
++            <div>
++              <label htmlFor="okRx" className="block text-xs font-medium text-slate-300 mb-1">
++                Success message pattern (regex)
++              </label>
++              <input
++                id="okRx"
++                type="text"
++                value={settings.okRx}
++                onChange={(e) => onChange('okRx', e.target.value)}
++                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
++              />
++            </div>
++            <p className="text-xs text-slate-400 leading-relaxed">
++              Precedence: reverted later, CI failed, failure pattern, CI passed, success pattern. When CI lookup is enabled, every extracted commit is checked automatically.
++            </p>
++          </div>
++        </details>
++
++        <div className="pt-2 space-y-2">
++          {isOffline && (
++            <div className="flex items-start gap-2 rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200 leading-relaxed">
++              <WifiOff className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
++              <span>
++                You are offline. Remote GitHub/LLM calls are paused, while locally cached commits, full engines, exports, and heuristic classification remain active.
++              </span>
++            </div>
++          )}
++
++          {!isFetching ? (
++            <>
++              <button
++                type="button"
++                onClick={onFetch}
++                disabled={!canFetch || isOffline}
++                className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors whitespace-nowrap disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++              >
++                <DownloadCloud className="w-4 h-4" aria-hidden="true" />
++                {isOffline ? 'Offline (remote pull unavailable)' : 'Pull & classify commit history'}
++              </button>
++
++              {hasLocalData && (
++                <button
++                  type="button"
++                  onClick={onReclassifyOffline}
++                  className="w-full flex items-center justify-center gap-2 text-xs font-medium py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
++                >
++                  <Cpu className="w-3.5 h-3.5 text-sky-400" aria-hidden="true" />
++                  Re-classify loaded archive locally (no LLM)
++                </button>
++              )}
++            </>
++          ) : (
++            <button
++              type="button"
++              onClick={onStop}
++              className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 px-4 rounded-lg bg-rose-700 hover:bg-rose-600 text-white transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
++            >
++              <Square className="w-4 h-4" aria-hidden="true" />
++              Stop extraction
++            </button>
++          )}
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/ToastStack.tsx b/src/components/ToastStack.tsx
+new file mode 100644
+index 0000000..275f089
+--- /dev/null
++++ b/src/components/ToastStack.tsx
+@@ -0,0 +1,43 @@
++import { X } from 'lucide-react';
++import type { ToastItem } from '../types/git';
++
++interface ToastStackProps {
++  toasts: ToastItem[];
++  onDismiss: (id: string) => void;
++}
++
++export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
++  if (toasts.length === 0) return null;
++
++  const variantClasses: Record<ToastItem['variant'], string> = {
++    info: 'border-slate-700 bg-slate-900 text-slate-200',
++    success: 'border-emerald-700/70 bg-slate-900 text-emerald-300',
++    warning: 'border-amber-700/70 bg-slate-900 text-amber-300',
++    error: 'border-rose-700/70 bg-slate-900 text-rose-300',
++  };
++
++  return (
++    <div
++      aria-live="polite"
++      className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"
++    >
++      {toasts.map((toast) => (
++        <div
++          key={toast.id}
++          role="status"
++          className={`pointer-events-auto border rounded-xl px-4 py-3 shadow-lg flex items-start justify-between gap-3 text-xs leading-relaxed ${variantClasses[toast.variant]}`}
++        >
++          <span>{toast.message}</span>
++          <button
++            type="button"
++            onClick={() => onDismiss(toast.id)}
++            aria-label="Dismiss notification"
++            className="text-slate-400 hover:text-white shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded"
++          >
++            <X className="w-4 h-4" />
++          </button>
++        </div>
++      ))}
++    </div>
++  );
++}
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+new file mode 100644
+index 0000000..a66b98c
+--- /dev/null
++++ b/src/components/TopBar.tsx
+@@ -0,0 +1,65 @@
++import { Play } from 'lucide-react';
++
++interface TopBarProps {
++  connectedLogin: string | null;
++  isDemo: boolean;
++  isFetching: boolean;
++  onLoadDemo: () => void;
++}
++
++export function TopBar({ connectedLogin, isDemo, isFetching, onLoadDemo }: TopBarProps) {
++  return (
++    <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
++      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
++        <a
++          href="#top"
++          className="text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-md"
++        >
++          GitHistory Sync
++        </a>
++
++        <nav
++          aria-label="Workspace sections"
++          className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400"
++        >
++          <a
++            href="#credentials"
++            className="hover:text-white transition-colors whitespace-nowrap shrink-0"
++          >
++            Credentials
++          </a>
++          <a
++            href="#extraction"
++            className="hover:text-white transition-colors whitespace-nowrap shrink-0"
++          >
++            Extraction
++          </a>
++          <a
++            href="#destination"
++            className="hover:text-white transition-colors whitespace-nowrap shrink-0"
++          >
++            Destination
++          </a>
++          <a
++            href="#archive"
++            className="hover:text-white transition-colors whitespace-nowrap shrink-0"
++          >
++            Archive
++          </a>
++        </nav>
++
++        <div className="flex items-center shrink-0">
++          <button
++            type="button"
++            onClick={onLoadDemo}
++            disabled={isFetching}
++            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++          >
++            <Play className="w-3.5 h-3.5" aria-hidden="true" />
++            {connectedLogin && isDemo ? 'Reload Demo' : 'Load Demo'}
++          </button>
++        </div>
++      </div>
++    </header>
++  );
++}
+diff --git a/src/components/WorkspaceOutput.tsx b/src/components/WorkspaceOutput.tsx
+new file mode 100644
+index 0000000..1fb33e9
+--- /dev/null
++++ b/src/components/WorkspaceOutput.tsx
+@@ -0,0 +1,553 @@
++import { useEffect, useMemo, useState } from 'react';
++import { Clock, Copy, Cpu, Download, FileCode2, Search } from 'lucide-react';
++import type {
++  ActiveTaskTimer,
++  ActivityEntry,
++  ClassifiedCommit,
++  FetchStats,
++  LogBucket,
++  SiphonedEngine,
++} from '../types/git';
++import { formatBytes, formatClockTimer, formatDurationMs } from '../utils/formatter';
++
++interface WorkspaceOutputProps {
++  stats: FetchStats;
++  progressPct: number;
++  isFetching: boolean;
++  taskTimer: ActiveTaskTimer | null;
++  lastRunDurationMs: number | null;
++  logs: ActivityEntry[];
++  onClearLogs: () => void;
++  commits: ClassifiedCommit[];
++  engines: SiphonedEngine[];
++  outputs: { successful: string; failed: string; engines: string };
++  filenames: { successful: string; failed: string; engines: string };
++  activeBucket: LogBucket;
++  onBucketChange: (bucket: LogBucket) => void;
++  onCopy: () => void;
++  onCopyEngineSource: (engine: SiphonedEngine) => void;
++  onDownloadAll: () => void;
++}
++
++export function WorkspaceOutput({
++  stats,
++  progressPct,
++  isFetching,
++  taskTimer,
++  lastRunDurationMs,
++  logs,
++  onClearLogs,
++  commits,
++  engines,
++  outputs,
++  filenames,
++  activeBucket,
++  onBucketChange,
++  onCopy,
++  onCopyEngineSource,
++  onDownloadAll,
++}: WorkspaceOutputProps) {
++  const [viewMode, setViewMode] = useState<'raw' | 'inspector'>('inspector');
++  const [searchQuery, setSearchQuery] = useState('');
++  const [renderLimit, setRenderLimit] = useState(150);
++  const [nowMs, setNowMs] = useState(() => Date.now());
++
++  useEffect(() => {
++    if (!isFetching) return;
++    setNowMs(Date.now());
++    const id = window.setInterval(() => {
++      setNowMs(Date.now());
++    }, 250);
++    return () => window.clearInterval(id);
++  }, [isFetching]);
++
++  useEffect(() => {
++    setRenderLimit(150);
++  }, [activeBucket, searchQuery, commits.length]);
++
++  const runElapsedMs = taskTimer ? Math.max(0, nowMs - taskTimer.runStartedAt) : 0;
++  const itemElapsedMs = taskTimer ? Math.max(0, nowMs - taskTimer.itemStartedAt) : 0;
++
++  const okCount = useMemo(
++    () => commits.filter((c) => c.classification === 'successful').length,
++    [commits]
++  );
++  const badCount = useMemo(
++    () => commits.filter((c) => c.classification === 'failed').length,
++    [commits]
++  );
++
++  const visibleCommits = useMemo(() => {
++    if (activeBucket === 'engines') return [];
++    const q = searchQuery.trim().toLowerCase();
++    return commits.filter((c) => {
++      if (c.classification !== activeBucket) return false;
++      if (!q) return true;
++      return (
++        c.message.toLowerCase().includes(q) ||
++        c.repo.toLowerCase().includes(q) ||
++        c.sha.toLowerCase().includes(q) ||
++        c.source.toLowerCase().includes(q) ||
++        c.footprint.toLowerCase().includes(q)
++      );
++    });
++  }, [commits, activeBucket, searchQuery]);
++
++  const visibleEngines = useMemo(() => {
++    if (activeBucket !== 'engines') return [];
++    const q = searchQuery.trim().toLowerCase();
++    return engines.filter((e) => {
++      if (!q) return true;
++      return (
++        e.repo.toLowerCase().includes(q) ||
++        e.filePath.toLowerCase().includes(q) ||
++        e.language.toLowerCase().includes(q) ||
++        e.role.toLowerCase().includes(q) ||
++        e.classNames.some((c) => c.toLowerCase().includes(q)) ||
++        e.functionNames.some((f) => f.toLowerCase().includes(q))
++      );
++    });
++  }, [engines, activeBucket, searchQuery]);
++
++  const activeText = outputs[activeBucket];
++  const rawPreviewText =
++    activeText.length > 400_000
++      ? `${activeText.slice(0, 400_000)}\n\n... [Preview truncated at 400 KB for UI responsiveness — Copy, Download all, and Push to GitHub always export 100% of the full archive (${formatBytes(activeText.length)}).]`
++      : activeText;
++  const renderedCommits = visibleCommits.slice(0, renderLimit);
++  const hasOutput = commits.length > 0 || engines.length > 0;
++
++  return (
++    <div id="archive" className="flex flex-col gap-6 scroll-mt-20">
++      {/* KPI Strip */}
++      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
++        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
++          <p className="text-xs text-slate-400 font-medium">Repos scanned</p>
++          <p className="text-xl sm:text-2xl font-bold mt-1 font-mono tabular-nums text-white">
++            {stats.reposScanned}{' '}
++            <span className="text-xs font-normal text-slate-500">/ {stats.reposTotal}</span>
++          </p>
++        </div>
++        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
++          <p className="text-xs text-slate-400 font-medium">Branches · Engines</p>
++          <p className="text-xl sm:text-2xl font-bold mt-1 font-mono tabular-nums text-purple-400">
++            {stats.branchesScanned}{' '}
++            <span className="text-xs font-normal text-sky-400">/ {stats.enginesSiphoned} eng</span>
++          </p>
++        </div>
++        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
++          <p className="text-xs text-slate-400 font-medium">Unique commits</p>
++          <p className="text-xl sm:text-2xl font-bold mt-1 font-mono tabular-nums text-emerald-400">
++            {stats.uniqueCommits}
++          </p>
++        </div>
++        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
++          <p className="text-xs text-slate-400 font-medium">Combined size</p>
++          <p className="text-xl sm:text-2xl font-bold mt-1 font-mono tabular-nums text-sky-400">
++            {formatBytes(stats.combinedBytes)}
++          </p>
++        </div>
++      </div>
++
++      {/* Live Activity Log */}
++      <section
++        aria-label="Activity log"
++        className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col"
++      >
++        <div className="bg-slate-950 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
++          <div className="flex items-center gap-2.5">
++            <span className="text-xs font-medium text-slate-300">Activity Log</span>
++            {isFetching && taskTimer ? (
++              <span
++                aria-live="off"
++                data-testid="live-timer-badge"
++                className="inline-flex items-center gap-1.5 text-xs font-mono tabular-nums text-emerald-400"
++              >
++                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true" />
++                Total {formatClockTimer(runElapsedMs)}
++              </span>
++            ) : lastRunDurationMs !== null ? (
++              <span className="inline-flex items-center gap-1 text-xs font-mono tabular-nums text-slate-400">
++                <Clock className="w-3 h-3 text-slate-500" aria-hidden="true" />
++                Completed in {formatDurationMs(lastRunDurationMs)}
++              </span>
++            ) : null}
++          </div>
++          <button
++            type="button"
++            onClick={onClearLogs}
++            className="text-xs text-slate-400 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded px-1.5 py-0.5"
++          >
++            Clear
++          </button>
++        </div>
++        {isFetching && (
++          <>
++            <div className="w-full bg-slate-950 h-1.5">
++              <div
++                className="bg-emerald-500 h-1.5 transition-all duration-200"
++                style={{ width: `${Math.min(100, Math.max(4, progressPct))}%` }}
++              />
++            </div>
++            {taskTimer && (
++              <div
++                aria-live="off"
++                data-testid="active-step-timer"
++                className="px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono"
++              >
++                <div className="min-w-0 flex items-center gap-2">
++                  <Clock className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
++                  <span className="text-white font-semibold truncate max-w-[220px] sm:max-w-xs">
++                    {taskTimer.label}
++                  </span>
++                  {taskTimer.detail && (
++                    <span className="text-slate-400 truncate max-w-[260px] sm:max-w-sm">
++                      · {taskTimer.detail}
++                    </span>
++                  )}
++                </div>
++                <div className="flex items-center gap-3 tabular-nums shrink-0 text-slate-300">
++                  <span>
++                    Current <strong className="text-emerald-400">{formatClockTimer(itemElapsedMs)}</strong>
++                  </span>
++                  <span className="text-slate-600" aria-hidden="true">
++                    |
++                  </span>
++                  <span>
++                    Run <strong className="text-sky-400">{formatClockTimer(runElapsedMs)}</strong>
++                  </span>
++                </div>
++              </div>
++            )}
++          </>
++        )}
++        <div
++          role="log"
++          aria-live="polite"
++          className="p-4 h-44 overflow-y-auto font-mono text-xs space-y-1.5 bg-slate-950/60 text-slate-300"
++        >
++          {logs.length === 0 ? (
++            <div className="text-slate-500">
++              Enter your GitHub token or click Load Demo to start extracting commit history &amp; full engines.
++            </div>
++          ) : (
++            logs.map((entry) => {
++              const levelStyles: Record<ActivityEntry['level'], string> = {
++                info: 'text-slate-400',
++                success: 'text-emerald-400',
++                warn: 'text-amber-400',
++                error: 'text-rose-400',
++              };
++              const levelTag: Record<ActivityEntry['level'], string> = {
++                info: 'INFO',
++                success: 'DONE',
++                warn: 'WARN',
++                error: 'ERR ',
++              };
++              return (
++                <div key={entry.id} className="flex items-start gap-2.5 leading-relaxed">
++                  <span className="text-slate-500 tabular-nums shrink-0">{entry.timestamp}</span>
++                  <span className={`font-semibold shrink-0 ${levelStyles[entry.level]}`}>
++                    {levelTag[entry.level]}
++                  </span>
++                  <span className="text-slate-200 break-words">{entry.message}</span>
++                </div>
++              );
++            })
++          )}
++        </div>
++      </section>
++
++      {/* Split Archive Preview & Commit / Engine Inspector */}
++      <section
++        aria-label="Split archive preview and commit inspector"
++        className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col flex-grow min-h-[460px]"
++      >
++        <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
++          <div className="flex items-center gap-2 min-w-0">
++            <FileCode2 className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
++            <span className="text-xs font-mono font-medium text-white truncate max-w-[260px] sm:max-w-xs">
++              {filenames[activeBucket]}
++            </span>
++          </div>
++
++          <div className="flex flex-wrap items-center gap-2">
++            {/* Bucket Tabs */}
++            <div
++              className="inline-flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900"
++              role="group"
++              aria-label="Log bucket"
++            >
++              <button
++                type="button"
++                onClick={() => onBucketChange('successful')}
++                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
++                  activeBucket === 'successful'
++                    ? 'bg-emerald-600 text-white'
++                    : 'text-slate-300 hover:bg-slate-800'
++                }`}
++              >
++                Successful <span className="font-mono tabular-nums ml-1">{okCount}</span>
++              </button>
++              <button
++                type="button"
++                onClick={() => onBucketChange('failed')}
++                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
++                  activeBucket === 'failed'
++                    ? 'bg-rose-700 text-white'
++                    : 'text-slate-300 hover:bg-slate-800'
++                }`}
++              >
++                Failed <span className="font-mono tabular-nums ml-1">{badCount}</span>
++              </button>
++              <button
++                type="button"
++                onClick={() => onBucketChange('engines')}
++                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap ${
++                  activeBucket === 'engines'
++                    ? 'bg-sky-600 text-white'
++                    : 'text-slate-300 hover:bg-slate-800'
++                }`}
++              >
++                Engines <span className="font-mono tabular-nums ml-1">{engines.length}</span>
++              </button>
++            </div>
++
++            {/* View Toggle */}
++            <div
++              className="inline-flex rounded-lg overflow-hidden border border-slate-700 bg-slate-900"
++              role="group"
++              aria-label="Preview format"
++            >
++              <button
++                type="button"
++                onClick={() => setViewMode('inspector')}
++                className={`px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
++                  viewMode === 'inspector'
++                    ? 'bg-slate-700 text-white'
++                    : 'text-slate-400 hover:text-slate-200'
++                }`}
++              >
++                Inspector
++              </button>
++              <button
++                type="button"
++                onClick={() => setViewMode('raw')}
++                className={`px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
++                  viewMode === 'raw'
++                    ? 'bg-slate-700 text-white'
++                    : 'text-slate-400 hover:text-slate-200'
++                }`}
++              >
++                Raw File
++              </button>
++            </div>
++
++            <button
++              type="button"
++              onClick={onCopy}
++              disabled={!hasOutput}
++              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs text-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++            >
++              <Copy className="w-3.5 h-3.5" aria-hidden="true" />
++              Copy
++            </button>
++
++            <button
++              type="button"
++              onClick={onDownloadAll}
++              disabled={!hasOutput}
++              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs text-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
++            >
++              <Download className="w-3.5 h-3.5" aria-hidden="true" />
++              Download all
++            </button>
++          </div>
++        </div>
++
++        {viewMode === 'inspector' ? (
++          <div className="flex flex-col flex-grow bg-slate-950/70">
++            <div className="px-4 py-2.5 border-b border-slate-800/80 flex items-center gap-2">
++              <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" aria-hidden="true" />
++              <label htmlFor="commitSearch" className="sr-only">
++                {activeBucket === 'engines'
++                  ? 'Filter siphoned engines'
++                  : 'Filter classified commits'}
++              </label>
++              <input
++                id="commitSearch"
++                type="search"
++                value={searchQuery}
++                onChange={(e) => setSearchQuery(e.target.value)}
++                placeholder={
++                  activeBucket === 'engines'
++                    ? 'Filter engines by repo, file path, language, role, or symbol...'
++                    : 'Filter by SHA, repo, footprint, or message...'
++                }
++                className="w-full bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
++              />
++            </div>
++
++            {!hasOutput ? (
++              <div className="flex-grow flex flex-col items-center justify-center p-8 text-center">
++                <p className="text-sm font-medium text-slate-300">No archives extracted yet</p>
++                <p className="text-xs text-slate-500 mt-1 max-w-sm leading-relaxed">
++                  Verify a GitHub token or enter sources and run extraction, or click Load Demo to inspect commit logs and full unredacted engines.
++                </p>
++              </div>
++            ) : activeBucket === 'engines' ? (
++              visibleEngines.length === 0 ? (
++                <div className="flex-grow flex items-center justify-center p-8 text-xs text-slate-400">
++                  {engines.length === 0
++                    ? 'No runtime engines siphoned for this run.'
++                    : 'No engines match your current filter.'}
++                </div>
++              ) : (
++                <div className="overflow-x-auto flex-grow max-h-[520px] overflow-y-auto divide-y divide-slate-800/80">
++                  {visibleEngines.map((engine, idx) => (
++                    <article
++                      key={engine.id}
++                      className="px-4 py-3.5 hover:bg-slate-900/50 transition-colors space-y-2.5"
++                    >
++                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
++                        <div className="flex flex-wrap items-center gap-1.5 font-mono text-slate-400">
++                          <Cpu className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
++                          <span className="text-white font-semibold">{engine.repo}</span>
++                          <span aria-hidden="true">·</span>
++                          <span>branch: {engine.branch}</span>
++                          <span aria-hidden="true">·</span>
++                          <span className="text-emerald-400">{engine.language}</span>
++                        </div>
++                        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
++                          <span className="text-sky-400">{engine.role}</span>
++                          <span className="text-slate-600" aria-hidden="true">·</span>
++                          <span className="text-slate-300 tabular-nums">
++                            {engine.lineCount} lines ({formatBytes(engine.byteSize)})
++                          </span>
++                          <span className="text-slate-600" aria-hidden="true">·</span>
++                          <span className="text-emerald-400 font-semibold">UNREDACTED</span>
++                        </div>
++                      </div>
++
++                      <div className="flex flex-wrap items-center justify-between gap-2">
++                        <p className="text-sm font-mono font-medium text-slate-100 break-all">
++                          {engine.filePath}
++                        </p>
++                        <button
++                          type="button"
++                          onClick={() => onCopyEngineSource(engine)}
++                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
++                        >
++                          <Copy className="w-3 h-3" aria-hidden="true" />
++                          Copy full code
++                        </button>
++                      </div>
++
++                      <p className="text-xs text-slate-400 font-mono leading-relaxed">
++                        {engine.classNames.length > 0 && (
++                          <span>Classes: {engine.classNames.slice(0, 5).join(', ')} · </span>
++                        )}
++                        {engine.functionNames.length > 0 && (
++                          <span>Functions: {engine.functionNames.slice(0, 6).join(', ')} · </span>
++                        )}
++                        <span>
++                          Linked commits:{' '}
++                          {engine.relatedCommitShas.length > 0
++                            ? engine.relatedCommitShas.map((s) => s.slice(0, 7)).join(', ')
++                            : 'none'}
++                        </span>
++                      </p>
++
++                      <details open={idx === 0} className="rounded-lg border border-slate-800 bg-slate-950">
++                        <summary className="cursor-pointer px-3 py-1.5 text-xs font-mono text-sky-300 hover:text-sky-200 select-none">
++                          Full verbatim source ({engine.lineCount} lines · 0% redacted)
++                        </summary>
++                        <pre className="p-3 border-t border-slate-800/80 overflow-x-auto max-h-80 overflow-y-auto text-xs font-mono text-slate-200 leading-relaxed whitespace-pre">
++                          <code>{engine.fullCode}</code>
++                        </pre>
++                      </details>
++                    </article>
++                  ))}
++                </div>
++              )
++            ) : visibleCommits.length === 0 ? (
++              <div className="flex-grow flex items-center justify-center p-8 text-xs text-slate-400">
++                No {activeBucket} commits match your current filter.
++              </div>
++            ) : (
++              <div className="overflow-x-auto flex-grow max-h-[420px] overflow-y-auto divide-y divide-slate-800/80">
++                {renderedCommits.map((commit) => {
++                  const subject = commit.message.split('\n')[0];
++                  const confColor =
++                    commit.confidence === 'high'
++                      ? 'text-emerald-400'
++                      : commit.confidence === 'medium'
++                        ? 'text-amber-400'
++                        : 'text-slate-400';
++
++                  return (
++                    <article
++                      key={commit.sha}
++                      className="px-4 py-3 hover:bg-slate-900/60 transition-colors space-y-1.5"
++                    >
++                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
++                        <div className="flex flex-wrap items-center gap-1.5 text-slate-400 font-mono">
++                          <span className="text-white font-semibold">{commit.repo}</span>
++                          <span aria-hidden="true">·</span>
++                          <span>{commit.branches.join(', ')}</span>
++                          <span aria-hidden="true">·</span>
++                          <span>{commit.sha.slice(0, 7)}</span>
++                          <span aria-hidden="true">·</span>
++                          <span className="tabular-nums">{commit.date.slice(0, 10)}</span>
++                        </div>
++                        <div className="flex items-center gap-1.5 text-xs font-mono">
++                          <span className="text-sky-400">{commit.footprint}</span>
++                          <span aria-hidden="true" className="text-slate-600">
++                            ·
++                          </span>
++                          <span className={confColor}>{commit.confidence} confidence</span>
++                        </div>
++                      </div>
++
++                      <p className="text-sm font-medium text-slate-100 leading-snug">{subject}</p>
++
++                      <p className="text-xs text-slate-400 leading-relaxed">
++                        <span className="font-mono text-slate-300">{commit.source}</span>
++                        <span aria-hidden="true"> · </span>
++                        <span>{commit.reason}</span>
++                      </p>
++                    </article>
++                  );
++                })}
++                {visibleCommits.length > renderLimit && (
++                  <div className="px-4 py-3 bg-slate-950/90 flex items-center justify-between gap-2 text-xs">
++                    <span className="text-slate-400 font-mono tabular-nums">
++                      Showing {renderedCommits.length} of {visibleCommits.length} commits
++                    </span>
++                    <button
++                      type="button"
++                      onClick={() => setRenderLimit((prev) => prev + 150)}
++                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium"
++                    >
++                      Load 150 more
++                    </button>
++                  </div>
++                )}
++              </div>
++            )}
++          </div>
++        ) : (
++          <div className="relative flex-grow bg-slate-950/80">
++            <textarea
++              readOnly
++              aria-label="Raw archive output preview"
++              value={rawPreviewText}
++              placeholder="The compiled successful, failed, and full engine archives appear here after extraction."
++              className="w-full h-full min-h-[360px] p-4 bg-transparent font-mono text-xs text-slate-300 focus:outline-none resize-none leading-relaxed"
++            />
++          </div>
++        )}
++      </section>
++    </div>
++  );
++}
+diff --git a/src/index.css b/src/index.css
+new file mode 100644
+index 0000000..4f3bfdc
+--- /dev/null
++++ b/src/index.css
+@@ -0,0 +1,27 @@
++@import "tailwindcss";
++@custom-variant dark (&:where(.dark, .dark *));
++
++@theme {
++  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
++  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
++}
++
++@layer base {
++  html {
++    font-family: var(--font-sans);
++    scroll-behavior: smooth;
++  }
++
++  .tabular-nums {
++    font-variant-numeric: tabular-nums;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  *, *::before, *::after {
++    animation-duration: 0.01ms !important;
++    animation-iteration-count: 1 !important;
++    transition-duration: 0.01ms !important;
++    scroll-behavior: auto !important;
++  }
++}
+diff --git a/src/main.tsx b/src/main.tsx
+new file mode 100644
+index 0000000..c1d9f92
+--- /dev/null
++++ b/src/main.tsx
+@@ -0,0 +1,5 @@
++import {createRoot} from 'react-dom/client';
++import App from './App.tsx';
++import './index.css';
++
++createRoot(document.getElementById('root')!).render(<App />);
+diff --git a/src/types/git.ts b/src/types/git.ts
+new file mode 100644
+index 0000000..e4c257e
+--- /dev/null
++++ b/src/types/git.ts
+@@ -0,0 +1,163 @@
++export type ClassificationOutcome = 'successful' | 'failed';
++export type LogBucket = ClassificationOutcome | 'engines';
++export type BranchScope = 'all' | 'default' | 'first';
++export type ConfidenceLevel = 'high' | 'medium' | 'low';
++export type AiStrategy = 'consensus' | 'specialist' | 'gemini_only' | 'nvidia_only';
++export type ArchiveFormat = 'json' | 'markdown' | 'csv';
++export type LogLevel = 'info' | 'success' | 'warn' | 'error';
++
++export interface GitHubUser {
++  login: string;
++  name?: string | null;
++  avatar_url?: string;
++  html_url?: string;
++  public_repos?: number;
++  total_private_repos?: number;
++}
++
++export interface RepoSummary {
++  full_name: string;
++  name: string;
++  owner: string;
++  private: boolean;
++  fork: boolean;
++  default_branch: string;
++  html_url?: string;
++}
++
++export type CiState = 'success' | 'failure' | 'pending' | 'unknown';
++
++export interface RawCommit {
++  sha: string;
++  repo: string;
++  isPrivate: boolean;
++  branches: string[];
++  message: string;
++  authorName: string;
++  authorLogin?: string;
++  authorEmail?: string;
++  date: string;
++  htmlUrl?: string;
++  ciState?: CiState;
++}
++
++export interface LlmVerdict {
++  sha: string;
++  classification: ClassificationOutcome;
++  confidence: ConfidenceLevel;
++  reason: string;
++  footprint: string;
++  model: string;
++}
++
++export interface HeuristicResult {
++  classification: ClassificationOutcome;
++  confidence: ConfidenceLevel;
++  source: string;
++  reason: string;
++  needsAi: boolean;
++}
++
++export interface ClassifiedCommit extends RawCommit {
++  classification: ClassificationOutcome;
++  confidence: ConfidenceLevel;
++  source: string;
++  reason: string;
++  footprint: string;
++  geminiVerdict?: LlmVerdict;
++  nvidiaVerdict?: LlmVerdict;
++  escalatedTieBreaker?: boolean;
++}
++
++export type EngineRole =
++  | 'agent-loop'
++  | 'rag-retrieval'
++  | 'orchestrator'
++  | 'execution-sandbox'
++  | 'memory-state'
++  | 'router-gateway'
++  | 'core-runtime';
++
++export interface SiphonedEngine {
++  id: string;
++  repo: string;
++  branch: string;
++  treeSha?: string;
++  filePath: string;
++  rawUrl: string;
++  language: string;
++  role: EngineRole;
++  byteSize: number;
++  lineCount: number;
++  classNames: string[];
++  functionNames: string[];
++  imports: string[];
++  relatedCommitShas: string[];
++  redacted: false;
++  fullCode: string;
++  harvestedAt: string;
++}
++
++export interface ActivityEntry {
++  id: string;
++  timestamp: string;
++  level: LogLevel;
++  message: string;
++}
++
++export interface FetchStats {
++  reposScanned: number;
++  reposTotal: number;
++  branchesScanned: number;
++  uniqueCommits: number;
++  enginesSiphoned: number;
++  combinedBytes: number;
++}
++
++export interface ActiveTaskTimer {
++  label: string;
++  detail?: string;
++  runStartedAt: number;
++  itemStartedAt: number;
++}
++
++export interface ToastItem {
++  id: string;
++  message: string;
++  variant: 'info' | 'success' | 'warning' | 'error';
++}
++
++export interface ExtractionSettings {
++  authorFilter: string;
++  sources: string;
++  extAuthor: string;
++  repoFilter: string;
++  sinceDate: string;
++  untilDate: string;
++  branchScope: BranchScope;
++  siphonEngines: boolean;
++  includePrivate: boolean;
++  includeForks: boolean;
++  skipOwn: boolean;
++  includeEmails: boolean;
++  includeMine: boolean;
++  ciLookup: boolean;
++  failRx: string;
++  okRx: string;
++  aiStrategy: AiStrategy;
++  useGemini: boolean;
++  useGeminiBackup: boolean;
++  useLlm: boolean;
++  nvKey: string;
++  nvModel: string;
++  nvEndpoint: string;
++  nvPrivate: boolean;
++}
++
++export interface DestinationSettings {
++  targetRepo: string;
++  targetBranch: string;
++  targetPath: string;
++  fileFormat: ArchiveFormat;
++  autoCreateRepo: boolean;
++}
+diff --git a/src/utils/aiOrchestrator.ts b/src/utils/aiOrchestrator.ts
+new file mode 100644
+index 0000000..e39aabc
+--- /dev/null
++++ b/src/utils/aiOrchestrator.ts
+@@ -0,0 +1,416 @@
++import type {
++  AiStrategy,
++  ClassifiedCommit,
++  ExtractionSettings,
++  HeuristicResult,
++  LlmVerdict,
++  LogLevel,
++  RawCommit,
++} from '../types/git';
++import {
++  classifyHeuristic,
++  compileRegexSafe,
++  DEFAULT_FAIL_PATTERN,
++  DEFAULT_OK_PATTERN,
++  detectRevertedShas,
++  reconcileDualVerdicts,
++} from './classifier';
++import { computeAiBatchCooldownMs, fetchWithTimeout, sleepWithAbort } from './rateLimiter';
++import { formatDurationMs } from './formatter';
++
++const LLM_BATCH_TIMEOUT_MS = 60_000;
++
++interface ClassifyCommitInput {
++  sha: string;
++  repo: string;
++  message: string;
++  ciState?: string;
++  authorName: string;
++}
++
++export async function testGeminiConnection(useGeminiBackup = true): Promise<{
++  model: string;
++  status: string;
++  usedBackup: boolean;
++  primaryError?: string;
++}> {
++  const res = await fetchWithTimeout('/api/gemini/test', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ useGeminiBackup }),
++  }, 30_000);
++  const data = (await res.json()) as {
++    ok?: boolean;
++    model?: string;
++    status?: string;
++    usedBackup?: boolean;
++    primaryError?: string;
++    error?: string;
++  };
++  if (!res.ok || !data.ok) {
++    throw new Error(data.error || `Gemini test failed (HTTP ${res.status})`);
++  }
++  return {
++    model: data.model || 'gemini-4-carbon',
++    status: data.status || 'Connected',
++    usedBackup: Boolean(data.usedBackup),
++    primaryError: data.primaryError,
++  };
++}
++
++export async function testNvidiaConnection(params: {
++  nvKey: string;
++  nvModel: string;
++  nvEndpoint: string;
++}): Promise<{ model: string; status: string }> {
++  const res = await fetchWithTimeout('/api/nvidia/test', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(params),
++  }, 30_000);
++  const data = (await res.json()) as { ok?: boolean; model?: string; status?: string; error?: string };
++  if (!res.ok || !data.ok) {
++    throw new Error(data.error || `NVIDIA NIM test failed (HTTP ${res.status})`);
++  }
++  return { model: data.model || params.nvModel, status: data.status || 'Connected' };
++}
++
++async function callGeminiBatch(
++  commits: ClassifyCommitInput[],
++  role: 'primary' | 'specialist_success' | 'tie_breaker',
++  useGeminiBackup: boolean,
++  context?: Record<string, { gemini?: LlmVerdict; nvidia?: LlmVerdict }>,
++  signal?: AbortSignal
++): Promise<{
++  verdicts: LlmVerdict[];
++  modelUsed: string;
++  usedBackup: boolean;
++  primaryError?: string;
++}> {
++  const res = await fetchWithTimeout('/api/gemini/classify', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    signal,
++    body: JSON.stringify({ commits, role, context, useGeminiBackup }),
++  }, LLM_BATCH_TIMEOUT_MS);
++  const data = (await res.json()) as {
++    verdicts?: LlmVerdict[];
++    modelUsed?: string;
++    usedBackup?: boolean;
++    primaryError?: string;
++    error?: string;
++  };
++  if (!res.ok) {
++    throw new Error(data.error || `Gemini classify failed (HTTP ${res.status})`);
++  }
++  return {
++    verdicts: data.verdicts ?? [],
++    modelUsed: data.modelUsed || 'gemini-4-carbon',
++    usedBackup: Boolean(data.usedBackup),
++    primaryError: data.primaryError,
++  };
++}
++
++async function callNvidiaBatch(
++  commits: ClassifyCommitInput[],
++  role: 'primary' | 'specialist_risk',
++  settings: { nvKey: string; nvModel: string; nvEndpoint: string },
++  signal?: AbortSignal
++): Promise<LlmVerdict[]> {
++  const res = await fetchWithTimeout('/api/nvidia/classify', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    signal,
++    body: JSON.stringify({ commits, role, ...settings }),
++  }, LLM_BATCH_TIMEOUT_MS);
++  const data = (await res.json()) as { verdicts?: LlmVerdict[]; error?: string };
++  if (!res.ok) {
++    throw new Error(data.error || `NVIDIA classify failed (HTTP ${res.status})`);
++  }
++  return data.verdicts ?? [];
++}
++
++export function isTerminalAiQuotaOrOfflineError(message: string): boolean {
++  return /429|RESOURCE_EXHAUSTED|quota|limit:\s*0|billing|not configured|missing|rejected|401|402|403|404|Failed to fetch|NetworkError|ECONNREFUSED|ENOTFOUND|offline|timed out/i.test(
++    message
++  );
++}
++
++export function shouldUseModels(settings: ExtractionSettings): {
++  runGemini: boolean;
++  runNvidia: boolean;
++  strategy: AiStrategy;
++} {
++  const strategy = settings.aiStrategy;
++  const runGemini =
++    settings.useGemini && strategy !== 'nvidia_only';
++  const runNvidia =
++    settings.useLlm && strategy !== 'gemini_only';
++  return { runGemini, runNvidia, strategy };
++}
++
++export async function classifyAndOrchestrate(
++  rawCommits: RawCommit[],
++  settings: ExtractionSettings,
++  onLog: (msg: string, level?: LogLevel) => void,
++  signal?: AbortSignal,
++  onStage?: (label: string, detail?: string, resetItemTimer?: boolean) => void
++): Promise<ClassifiedCommit[]> {
++  const revertedShas = detectRevertedShas(rawCommits);
++  const failCompiled = compileRegexSafe(settings.failRx, DEFAULT_FAIL_PATTERN);
++  if (failCompiled.error) {
++    onLog(`Invalid failure regex (${failCompiled.error}); using default pattern.`, 'warn');
++  }
++  const okCompiled = compileRegexSafe(settings.okRx, DEFAULT_OK_PATTERN);
++  if (okCompiled.error) {
++    onLog(`Invalid success regex (${okCompiled.error}); using default pattern.`, 'warn');
++  }
++
++  onStage?.('Heuristic analysis', `Evaluating ${rawCommits.length} commits`, true);
++
++  const heuristics = new Map<string, HeuristicResult>();
++  const ambiguousQueue: RawCommit[] = [];
++
++  for (const commit of rawCommits) {
++    const h = classifyHeuristic(commit, {
++      revertedShas,
++      failRx: failCompiled.regex,
++      okRx: okCompiled.regex,
++    });
++    heuristics.set(commit.sha, h);
++    if (h.needsAi) {
++      ambiguousQueue.push(commit);
++    }
++  }
++
++  onLog(
++    `Heuristic pass complete: ${rawCommits.length - ambiguousQueue.length} high-confidence, ${ambiguousQueue.length} ambiguous queued for AI.`,
++    'info'
++  );
++
++  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
++  const { runGemini: cfgGemini, runNvidia: cfgNvidia, strategy } = shouldUseModels(settings);
++  let geminiTripped = !cfgGemini || isOffline;
++  let nvidiaTripped = !cfgNvidia || isOffline;
++
++  if (isOffline && (cfgGemini || cfgNvidia) && ambiguousQueue.length > 0) {
++    onLog(
++      'Offline mode detected — skipping cloud LLM requests and completing classification locally via deterministic heuristics.',
++      'warn'
++    );
++  }
++
++  const eligible = ambiguousQueue.filter((c) => settings.nvPrivate || !c.isPrivate);
++
++  if (!settings.nvPrivate && ambiguousQueue.some((c) => c.isPrivate)) {
++    onLog('Skipping private repository commits in AI review ("Send private repo msgs" is off).', 'info');
++  }
++
++  const geminiMap = new Map<string, LlmVerdict>();
++  const nvidiaMap = new Map<string, LlmVerdict>();
++  const tieBreakerMap = new Map<string, LlmVerdict>();
++  let loggedBackupNotice = false;
++  let geminiFailures = 0;
++  let nvidiaFailures = 0;
++
++  if (eligible.length > 0 && (!geminiTripped || !nvidiaTripped)) {
++    const batchSize = 15;
++    const totalBatches = Math.ceil(eligible.length / batchSize);
++    for (let i = 0; i < eligible.length; i += batchSize) {
++      if (signal?.aborted) throw new Error('Operation cancelled.');
++      if (geminiTripped && nvidiaTripped) {
++        const remaining = eligible.length - i;
++        onLog(
++          `All enabled LLMs reached quota/offline limits — classifying remaining ${remaining} commit(s) locally with zero interruption.`,
++          'warn'
++        );
++        break;
++      }
++
++      const batchNum = Math.floor(i / batchSize) + 1;
++      const slice = eligible.slice(i, i + batchSize);
++      const batchStartedAt = Date.now();
++      onStage?.(
++        `AI batch ${batchNum} / ${totalBatches}`,
++        `Classifying ${slice.length} ambiguous commits`,
++        true
++      );
++      const payload: ClassifyCommitInput[] = slice.map((c) => ({
++        sha: c.sha,
++        repo: c.repo,
++        message: c.message.slice(0, 600),
++        ciState: c.ciState,
++        authorName: c.authorName,
++      }));
++
++      const tasks: Promise<void>[] = [];
++
++      if (!geminiTripped) {
++        const gemRole = strategy === 'specialist' ? 'specialist_success' : 'primary';
++        tasks.push(
++          callGeminiBatch(payload, gemRole, settings.useGeminiBackup, undefined, signal)
++            .then(({ verdicts, modelUsed, usedBackup, primaryError }) => {
++              geminiFailures = 0;
++              if (usedBackup && !loggedBackupNotice) {
++                loggedBackupNotice = true;
++                onLog(
++                  `Primary gemini-4-carbon unavailable (${primaryError || 'fallback triggered'}); switched to ${modelUsed} backup.`,
++                  'warn'
++                );
++              }
++              for (const v of verdicts) geminiMap.set(v.sha, v);
++              const label = usedBackup
++                ? `Gemini Lite backup (${modelUsed})`
++                : 'Gemini 4 Carbon (High Thinking)';
++              onLog(
++                `${label} reviewed ${verdicts.length} commits (batch ${batchNum}/${totalBatches} in ${formatDurationMs(Date.now() - batchStartedAt)}).`,
++                'success'
++              );
++            })
++            .catch((err) => {
++              const msg = err instanceof Error ? err.message : String(err);
++              if (signal?.aborted || msg === 'Operation cancelled.') throw err;
++              geminiFailures += 1;
++              if (isTerminalAiQuotaOrOfflineError(msg) || geminiFailures >= 2) {
++                geminiTripped = true;
++                onLog(
++                  `Gemini limit/offline reached (${msg}) — bypassing Gemini for remaining batches so processing continues locally.`,
++                  'warn'
++                );
++              } else {
++                onLog(`Gemini review error: ${msg}`, 'error');
++              }
++            })
++        );
++      }
++
++      if (!nvidiaTripped) {
++        const nvRole = strategy === 'specialist' ? 'specialist_risk' : 'primary';
++        tasks.push(
++          callNvidiaBatch(
++            payload,
++            nvRole,
++            {
++              nvKey: settings.nvKey,
++              nvModel: settings.nvModel,
++              nvEndpoint: settings.nvEndpoint,
++            },
++            signal
++          )
++            .then((verdicts) => {
++              nvidiaFailures = 0;
++              for (const v of verdicts) nvidiaMap.set(v.sha, v);
++              onLog(
++                `NVIDIA NIM (${settings.nvModel}) reviewed ${verdicts.length} commits (batch ${batchNum}/${totalBatches} in ${formatDurationMs(Date.now() - batchStartedAt)}).`,
++                'success'
++              );
++            })
++            .catch((err) => {
++              const msg = err instanceof Error ? err.message : String(err);
++              if (signal?.aborted || msg === 'Operation cancelled.') throw err;
++              nvidiaFailures += 1;
++              if (isTerminalAiQuotaOrOfflineError(msg) || nvidiaFailures >= 2) {
++                nvidiaTripped = true;
++                onLog(
++                  `NVIDIA NIM limit/offline reached (${msg}) — bypassing NVIDIA for remaining batches.`,
++                  'warn'
++                );
++              } else {
++                onLog(`NVIDIA NIM review error: ${msg}`, 'error');
++              }
++            })
++        );
++      }
++
++      await Promise.all(tasks);
++
++      if (geminiTripped && nvidiaTripped) {
++        const remaining = eligible.length - (i + batchSize);
++        if (remaining > 0) {
++          onLog(
++            `LLM limit/offline circuit breaker active — finishing ${remaining} remaining ambiguous commit(s) locally without LLMs.`,
++            'warn'
++          );
++        }
++        break;
++      }
++
++      if (i + batchSize < eligible.length) {
++        const cooldownMs = computeAiBatchCooldownMs(0);
++        onStage?.(
++          'AI rate-limit cooldown',
++          `Waiting ${(cooldownMs / 1000).toFixed(1)}s before batch ${batchNum + 1}`,
++          true
++        );
++        onLog(`Cooling down ${(cooldownMs / 1000).toFixed(1)}s between AI batches to respect API rate limits...`, 'info');
++        await sleepWithAbort(cooldownMs, signal);
++      }
++    }
++
++    // Check for Consensus disagreements requiring a Gemini tie-breaker
++    if (strategy === 'consensus' && !geminiTripped && cfgNvidia) {
++      const disagreements: RawCommit[] = [];
++      const disagreementCtx: Record<string, { gemini?: LlmVerdict; nvidia?: LlmVerdict }> = {};
++
++      for (const c of eligible) {
++        const g = geminiMap.get(c.sha);
++        const n = nvidiaMap.get(c.sha);
++        if (g && n && g.classification !== n.classification) {
++          disagreements.push(c);
++          disagreementCtx[c.sha] = { gemini: g, nvidia: n };
++        }
++      }
++
++      if (disagreements.length > 0) {
++        onStage?.(
++          'AI tie-breaker escalation',
++          `Resolving ${disagreements.length} split verdicts`,
++          true
++        );
++        await sleepWithAbort(1500, signal);
++        onLog(
++          `Escalating ${disagreements.length} split verdicts to Gemini tie-breaker...`,
++          'warn'
++        );
++        try {
++          const tieStartedAt = Date.now();
++          const tiePayload = disagreements.map((c) => ({
++            sha: c.sha,
++            repo: c.repo,
++            message: c.message.slice(0, 600),
++            ciState: c.ciState,
++            authorName: c.authorName,
++          }));
++          const { verdicts: resolved, modelUsed, usedBackup } = await callGeminiBatch(
++            tiePayload,
++            'tie_breaker',
++            settings.useGeminiBackup,
++            disagreementCtx,
++            signal
++          );
++          for (const v of resolved) tieBreakerMap.set(v.sha, v);
++          onLog(
++            `Tie-breaker resolved ${resolved.length} disputed commits via ${modelUsed}${usedBackup ? ' (backup)' : ''} in ${formatDurationMs(Date.now() - tieStartedAt)}.`,
++            'success'
++          );
++        } catch (err) {
++          const msg = err instanceof Error ? err.message : String(err);
++          onLog(`Tie-breaker skipped (${msg}); keeping primary verdict.`, 'warn');
++        }
++      }
++    }
++  }
++
++  return rawCommits.map((commit) => {
++    const h = heuristics.get(commit.sha)!;
++    const { classified } = reconcileDualVerdicts(
++      commit,
++      h,
++      geminiMap.get(commit.sha),
++      nvidiaMap.get(commit.sha),
++      strategy,
++      tieBreakerMap.get(commit.sha)
++    );
++    return classified;
++  });
++}
+diff --git a/src/utils/classifier.ts b/src/utils/classifier.ts
+new file mode 100644
+index 0000000..1b11a9f
+--- /dev/null
++++ b/src/utils/classifier.ts
+@@ -0,0 +1,323 @@
++import type {
++  AiStrategy,
++  ClassifiedCommit,
++  HeuristicResult,
++  LlmVerdict,
++  RawCommit,
++} from '../types/git';
++
++export const DEFAULT_FAIL_PATTERN =
++  '\\b(wip|broken|breaks?|failed|failing|rejected|rolled back|rollback|regression|does not work)\\b';
++export const DEFAULT_OK_PATTERN = '\\b(accepted|passed|improved|verified)\\b';
++
++export function compileRegexSafe(
++  pattern: string,
++  fallback: string
++): { regex: RegExp; error?: string } {
++  const trimmed = pattern.trim();
++  if (!trimmed) {
++    return { regex: new RegExp(fallback, 'i') };
++  }
++  try {
++    return { regex: new RegExp(trimmed, 'i') };
++  } catch (err) {
++    const message = err instanceof Error ? err.message : 'Invalid regular expression';
++    return { regex: new RegExp(fallback, 'i'), error: message };
++  }
++}
++
++/**
++ * Detects SHAs (full or 7+ char prefixes) referenced in revert commits so the original commit
++ * is flagged as reverted later.
++ */
++export function detectRevertedShas(commits: RawCommit[]): Set<string> {
++  const reverted = new Set<string>();
++  const prefixToShas = new Map<string, string[]>();
++  const subjectToShas = new Map<string, string[]>();
++
++  for (const commit of commits) {
++    const lowerSha = commit.sha.toLowerCase();
++    const prefix7 = lowerSha.slice(0, 7);
++    const shaList = prefixToShas.get(prefix7) ?? [];
++    shaList.push(lowerSha);
++    prefixToShas.set(prefix7, shaList);
++
++    const subject = commit.message.split('\n')[0].trim().toLowerCase();
++    const list = subjectToShas.get(subject) ?? [];
++    list.push(lowerSha);
++    subjectToShas.set(subject, list);
++  }
++
++  const revertLineRx = /This reverts commit ([0-9a-f]{7,40})/gi;
++  const revertHeaderRx = /^\s*Revert\s+"([^"]+)"/i;
++
++  for (const commit of commits) {
++    let match: RegExpExecArray | null;
++    revertLineRx.lastIndex = 0;
++    while ((match = revertLineRx.exec(commit.message)) !== null) {
++      const refSha = match[1].toLowerCase();
++      const candidates = prefixToShas.get(refSha.slice(0, 7));
++      if (candidates) {
++        for (const fullSha of candidates) {
++          if (fullSha.startsWith(refSha)) {
++            reverted.add(fullSha);
++          }
++        }
++      }
++    }
++
++    const headerMatch = revertHeaderRx.exec(commit.message);
++    if (headerMatch) {
++      const revertedSubject = headerMatch[1].trim().toLowerCase();
++      const targets = subjectToShas.get(revertedSubject);
++      if (targets) {
++        const selfSha = commit.sha.toLowerCase();
++        for (const t of targets) {
++          if (t !== selfSha) {
++            reverted.add(t);
++          }
++        }
++      }
++    }
++  }
++
++  return reverted;
++}
++
++/**
++ * Precedence:
++ * 1. Reverted later -> failed (high)
++ * 2. CI failed -> failed (high)
++ * 3. Failure regex match -> failed (high)
++ * 4. CI passed -> successful (high)
++ * 5. Success regex match -> successful (high)
++ * 6. Ambiguous -> needsAi = true (default tentative successful, low confidence)
++ */
++export function classifyHeuristic(
++  commit: RawCommit,
++  options: {
++    revertedShas: Set<string>;
++    failRx: RegExp;
++    okRx: RegExp;
++  }
++): HeuristicResult {
++  const shaLower = commit.sha.toLowerCase();
++
++  if (options.revertedShas.has(shaLower)) {
++    return {
++      classification: 'failed',
++      confidence: 'high',
++      source: 'heuristic:reverted',
++      reason: 'Commit was later reverted in repository history.',
++      needsAi: false,
++    };
++  }
++
++  if (commit.ciState === 'failure') {
++    return {
++      classification: 'failed',
++      confidence: 'high',
++      source: 'heuristic:ci-failed',
++      reason: 'Associated CI check suite or status reported failure.',
++      needsAi: false,
++    };
++  }
++
++  if (options.failRx.test(commit.message)) {
++    return {
++      classification: 'failed',
++      confidence: 'high',
++      source: 'heuristic:regex-fail',
++      reason: 'Commit message matched failure keyword pattern.',
++      needsAi: false,
++    };
++  }
++
++  if (commit.ciState === 'success') {
++    return {
++      classification: 'successful',
++      confidence: 'high',
++      source: 'heuristic:ci-passed',
++      reason: 'Associated CI checks passed.',
++      needsAi: false,
++    };
++  }
++
++  if (options.okRx.test(commit.message)) {
++    return {
++      classification: 'successful',
++      confidence: 'high',
++      source: 'heuristic:regex-ok',
++      reason: 'Commit message matched explicit acceptance/verification pattern.',
++      needsAi: false,
++    };
++  }
++
++  return {
++    classification: 'successful',
++    confidence: 'low',
++    source: 'heuristic:default',
++    reason: 'No explicit heuristic failure/CI signal; queued for AI classification.',
++    needsAi: true,
++  };
++}
++
++export interface ReconcileResult {
++  classified: ClassifiedCommit;
++  needsTieBreaker: boolean;
++}
++
++/**
++ * Reconciles heuristic baseline with Gemini and/or NVIDIA verdicts under the chosen strategy.
++ */
++export function reconcileDualVerdicts(
++  commit: RawCommit,
++  heuristic: HeuristicResult,
++  geminiVerdict: LlmVerdict | undefined,
++  nvidiaVerdict: LlmVerdict | undefined,
++  strategy: AiStrategy,
++  tieBreakerVerdict?: LlmVerdict
++): ReconcileResult {
++  const defaultFootprint = summarizeFootprint(commit.message);
++
++  if (!heuristic.needsAi) {
++    return {
++      classified: {
++        ...commit,
++        classification: heuristic.classification,
++        confidence: heuristic.confidence,
++        source: heuristic.source,
++        reason: heuristic.reason,
++        footprint: defaultFootprint,
++      },
++      needsTieBreaker: false,
++    };
++  }
++
++  if (tieBreakerVerdict) {
++    return {
++      classified: {
++        ...commit,
++        classification: tieBreakerVerdict.classification,
++        confidence: 'high',
++        source: 'dual-ai:tie-breaker',
++        reason: `Tie-breaker escalation (${tieBreakerVerdict.model}): ${tieBreakerVerdict.reason}`,
++        footprint: tieBreakerVerdict.footprint || defaultFootprint,
++        geminiVerdict,
++        nvidiaVerdict,
++        escalatedTieBreaker: true,
++      },
++      needsTieBreaker: false,
++    };
++  }
++
++  if (geminiVerdict && nvidiaVerdict) {
++    if (geminiVerdict.classification === nvidiaVerdict.classification) {
++      return {
++        classified: {
++          ...commit,
++          classification: geminiVerdict.classification,
++          confidence: 'high',
++          source: strategy === 'specialist' ? 'dual-ai:specialist-aligned' : 'dual-ai:consensus',
++          reason: `Consensus (${geminiVerdict.model} + ${nvidiaVerdict.model}): ${geminiVerdict.reason}`,
++          footprint: geminiVerdict.footprint || nvidiaVerdict.footprint || defaultFootprint,
++          geminiVerdict,
++          nvidiaVerdict,
++        },
++        needsTieBreaker: false,
++      };
++    }
++
++    // Disagreement between Gemini and NVIDIA
++    if (strategy === 'consensus') {
++      return {
++        classified: {
++          ...commit,
++          classification: geminiVerdict.classification,
++          confidence: 'medium',
++          source: 'dual-ai:disagreement',
++          reason: `Split verdict (Gemini=${geminiVerdict.classification}, NVIDIA=${nvidiaVerdict.classification}) awaiting tie-breaker.`,
++          footprint: geminiVerdict.footprint || nvidiaVerdict.footprint || defaultFootprint,
++          geminiVerdict,
++          nvidiaVerdict,
++        },
++        needsTieBreaker: true,
++      };
++    }
++
++    // Specialist split: NVIDIA failure signal overrides low-confidence success if high confidence
++    const preferNvidia =
++      nvidiaVerdict.classification === 'failed' && nvidiaVerdict.confidence === 'high';
++    const chosen = preferNvidia ? nvidiaVerdict : geminiVerdict;
++    return {
++      classified: {
++        ...commit,
++        classification: chosen.classification,
++        confidence: 'medium',
++        source: 'dual-ai:specialist-split',
++        reason: `Specialist resolution (${chosen.model}): ${chosen.reason}`,
++        footprint: chosen.footprint || defaultFootprint,
++        geminiVerdict,
++        nvidiaVerdict,
++      },
++      needsTieBreaker: false,
++    };
++  }
++
++  if (geminiVerdict) {
++    return {
++      classified: {
++        ...commit,
++        classification: geminiVerdict.classification,
++        confidence: geminiVerdict.confidence,
++        source: `ai:${geminiVerdict.model}`,
++        reason: geminiVerdict.reason,
++        footprint: geminiVerdict.footprint || defaultFootprint,
++        geminiVerdict,
++      },
++      needsTieBreaker: false,
++    };
++  }
++
++  if (nvidiaVerdict) {
++    return {
++      classified: {
++        ...commit,
++        classification: nvidiaVerdict.classification,
++        confidence: nvidiaVerdict.confidence,
++        source: `ai:${nvidiaVerdict.model}`,
++        reason: nvidiaVerdict.reason,
++        footprint: nvidiaVerdict.footprint || defaultFootprint,
++        nvidiaVerdict,
++      },
++      needsTieBreaker: false,
++    };
++  }
++
++  return {
++    classified: {
++      ...commit,
++      classification: heuristic.classification,
++      confidence: heuristic.confidence,
++      source: heuristic.source,
++      reason: heuristic.reason,
++      footprint: defaultFootprint,
++    },
++    needsTieBreaker: false,
++  };
++}
++
++export function summarizeFootprint(message: string): string {
++  const firstLine = message.split('\n')[0].trim();
++  const match = /^([a-zA-Z0-9_-]+)(\([^)]+\))?:\s*(.+)$/.exec(firstLine);
++  if (match) {
++    const scope = match[2] ? ` ${match[2]}` : '';
++    return `${match[1].toLowerCase()}${scope}`;
++  }
++  if (/fix|bug|patch|hotfix|race/i.test(firstLine)) return 'bugfix';
++  if (/feat|add|implement|support/i.test(firstLine)) return 'feature';
++  if (/refactor|clean|rename|format/i.test(firstLine)) return 'refactor';
++  if (/doc|readme|comment/i.test(firstLine)) return 'docs';
++  if (/test|spec|ci|workflow/i.test(firstLine)) return 'ci-test';
++  return 'chore';
++}
+diff --git a/src/utils/core.test.ts b/src/utils/core.test.ts
+new file mode 100644
+index 0000000..2c6d98f
+--- /dev/null
++++ b/src/utils/core.test.ts
+@@ -0,0 +1,488 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  CURATED_PRESETS,
++  appendPresetToSources,
++  deriveLogPaths,
++  matchesRepoFilter,
++  parseSources,
++  validateDestination,
++} from './sources';
++import {
++  classifyHeuristic,
++  compileRegexSafe,
++  DEFAULT_FAIL_PATTERN,
++  DEFAULT_OK_PATTERN,
++  detectRevertedShas,
++  reconcileDualVerdicts,
++} from './classifier';
++import { formatClockTimer, formatDurationMs, formatSplitArchives } from './formatter';
++import { DEMO_COMMITS, DEMO_ENGINES } from './demoData';
++import {
++  buildUnredactedEngineRecord,
++  scanEngineAst,
++  scoreEngineFilePath,
++  selectEngineTreePaths,
++} from './engineHarvester';
++import { isTerminalAiQuotaOrOfflineError } from './aiOrchestrator';
++import { computeAiBatchCooldownMs, computeGitHubCooldown, fetchWithTimeout } from './rateLimiter';
++import type { ClassifiedCommit, LlmVerdict } from '../types/git';
++
++test('parseSources normalizes URLs, owner/repo slugs, and usernames without duplicates', () => {
++  const parsed = parseSources(
++    'torvalds, https://github.com/vercel/next.js.git, vercel/next.js\nhttps://github.com/anthropics/'
++  );
++  assert.equal(parsed.length, 3);
++  assert.deepEqual(
++    parsed.map((p) => p.raw),
++    ['torvalds', 'vercel/next.js', 'anthropics']
++  );
++  assert.equal(parsed[0].type, 'owner');
++  assert.equal(parsed[1].type, 'repo');
++});
++
++test('appendPresetToSources merges additions without duplicating existing entries', () => {
++  const merged = appendPresetToSources('vercel/next.js, torvalds', [
++    'vercel/next.js',
++    'infiniflow/ragflow',
++  ]);
++  assert.equal(merged, 'vercel/next.js, torvalds, infiniflow/ragflow');
++});
++
++test('validateDestination rejects malformed repo, whitespace branch, and trailing slash path', () => {
++  assert.doesNotThrow(() =>
++    validateDestination('craighckby-stack/V1', 'main', 'memory/commit-history.json')
++  );
++  assert.throws(() => validateDestination('invalid-repo', 'main', 'memory/log.json'));
++  assert.throws(() => validateDestination('owner/repo', 'main branch', 'memory/log.json'));
++  assert.throws(() => validateDestination('owner/repo', 'main', 'memory/'));
++  assert.throws(() => validateDestination('owner/repo', 'main', '../secret.json'));
++});
++
++test('deriveLogPaths produces split successful, failed, and engines file names for each format', () => {
++  assert.deepEqual(deriveLogPaths('memory/commit-history.json', 'json'), {
++    successful: 'memory/commit-history.successful.json',
++    failed: 'memory/commit-history.failed.json',
++    engines: 'memory/commit-history.engines.json',
++  });
++  assert.deepEqual(deriveLogPaths('logs/archive.md', 'markdown'), {
++    successful: 'logs/archive.successful.md',
++    failed: 'logs/archive.failed.md',
++    engines: 'logs/archive.engines.md',
++  });
++  assert.deepEqual(deriveLogPaths('export', 'csv'), {
++    successful: 'export.successful.csv',
++    failed: 'export.failed.csv',
++    engines: 'export.engines.csv',
++  });
++});
++
++test('matchesRepoFilter filters repositories case-insensitively', () => {
++  assert.equal(matchesRepoFilter('craighckby-stack/V1', ''), true);
++  assert.equal(matchesRepoFilter('craighckby-stack/V1', 'v1, ragflow'), true);
++  assert.equal(matchesRepoFilter('vercel/next.js', 'v1, ragflow'), false);
++});
++
++test('detectRevertedShas catches both explicit SHA revert lines and subject reverts', () => {
++  const reverted = detectRevertedShas(DEMO_COMMITS);
++  assert.equal(reverted.has('f402a88e712b90c3d4112233445566778899aabb'), true);
++  assert.equal(reverted.has('8a4f21c9d03e7b11a5f42d8b2e7e0190c31f44a1'), false);
++});
++
++test('classifyHeuristic respects precedence: reverted > ci fail > fail rx > ci pass > ok rx > ambiguous', () => {
++  const revertedShas = detectRevertedShas(DEMO_COMMITS);
++  const { regex: failRx } = compileRegexSafe(DEFAULT_FAIL_PATTERN, DEFAULT_FAIL_PATTERN);
++  const { regex: okRx } = compileRegexSafe(DEFAULT_OK_PATTERN, DEFAULT_OK_PATTERN);
++
++  // Reverted commit whose CI state was unknown -> failed via reverted rule
++  const revertedCommit = DEMO_COMMITS.find((c) => c.sha.startsWith('f402a88'))!;
++  const resReverted = classifyHeuristic(revertedCommit, { revertedShas, failRx, okRx });
++  assert.equal(resReverted.classification, 'failed');
++  assert.equal(resReverted.source, 'heuristic:reverted');
++  assert.equal(resReverted.needsAi, false);
++
++  // CI failure overrides neutral message
++  const ciFailCommit = DEMO_COMMITS.find((c) => c.sha.startsWith('a11844b'))!;
++  const resCiFail = classifyHeuristic(ciFailCommit, { revertedShas, failRx, okRx });
++  assert.equal(resCiFail.classification, 'failed');
++  assert.equal(resCiFail.source, 'heuristic:ci-failed');
++
++  // Ambiguous commit with unknown CI and neutral message -> queued for AI
++  const ambigCommit = DEMO_COMMITS.find((c) => c.sha.startsWith('c20911a'))!;
++  const resAmbig = classifyHeuristic(ambigCommit, { revertedShas, failRx, okRx });
++  assert.equal(resAmbig.needsAi, true);
++  assert.equal(resAmbig.confidence, 'low');
++});
++
++test('reconcileDualVerdicts upgrades consensus matches and triggers tie-breaker on disagreements', () => {
++  const ambigCommit = DEMO_COMMITS.find((c) => c.sha.startsWith('c20911a'))!;
++  const heuristic = {
++    classification: 'successful' as const,
++    confidence: 'low' as const,
++    source: 'heuristic:default',
++    reason: 'Ambiguous',
++    needsAi: true,
++  };
++  const gemOk: LlmVerdict = {
++    sha: ambigCommit.sha,
++    classification: 'successful',
++    confidence: 'medium',
++    reason: 'Clean performance tuning',
++    footprint: 'perf',
++    model: 'gemini-4-carbon',
++  };
++  const nvOk: LlmVerdict = {
++    sha: ambigCommit.sha,
++    classification: 'successful',
++    confidence: 'medium',
++    reason: 'No regression cues',
++    footprint: 'perf',
++    model: 'nvidia/nemotron-3.5-bolt-e4b',
++  };
++  const nvFail: LlmVerdict = {
++    sha: ambigCommit.sha,
++    classification: 'failed',
++    confidence: 'high',
++    reason: 'Risky window tweak',
++    footprint: 'perf',
++    model: 'nvidia/nemotron-3.5-bolt-e4b',
++  };
++
++  const aligned = reconcileDualVerdicts(ambigCommit, heuristic, gemOk, nvOk, 'consensus');
++  assert.equal(aligned.needsTieBreaker, false);
++  assert.equal(aligned.classified.confidence, 'high');
++  assert.equal(aligned.classified.source, 'dual-ai:consensus');
++
++  const split = reconcileDualVerdicts(ambigCommit, heuristic, gemOk, nvFail, 'consensus');
++  assert.equal(split.needsTieBreaker, true);
++  assert.equal(split.classified.source, 'dual-ai:disagreement');
++
++  const resolved = reconcileDualVerdicts(ambigCommit, heuristic, gemOk, nvFail, 'consensus', {
++    ...gemOk,
++    classification: 'failed',
++    reason: 'Tie-breaker confirmed regression risk',
++  });
++  assert.equal(resolved.needsTieBreaker, false);
++  assert.equal(resolved.classified.classification, 'failed');
++  assert.equal(resolved.classified.source, 'dual-ai:tie-breaker');
++});
++
++test('formatSplitArchives generates valid JSON, Markdown, and escaped CSV for both buckets', () => {
++  const sample: ClassifiedCommit[] = [
++    {
++      ...DEMO_COMMITS[0],
++      classification: 'successful',
++      confidence: 'high',
++      source: 'heuristic:ci-passed',
++      reason: 'CI passed',
++      footprint: 'feat (sync)',
++    },
++    {
++      ...DEMO_COMMITS[1],
++      classification: 'failed',
++      confidence: 'high',
++      source: 'heuristic:ci-failed',
++      reason: 'CI failed, "broken"',
++      footprint: 'wip',
++    },
++  ];
++
++  const jsonOut = formatSplitArchives(sample, 'json', { includeEmails: false });
++  assert.equal(jsonOut.successfulCount, 1);
++  assert.equal(jsonOut.failedCount, 1);
++  const parsedOk = JSON.parse(jsonOut.successful);
++  assert.equal(parsedOk.commits[0].authorEmail, undefined);
++
++  const csvOut = formatSplitArchives(sample, 'csv', { includeEmails: true });
++  assert.match(csvOut.failed, /"CI failed, ""broken"""/);
++
++  const mdOut = formatSplitArchives(sample, 'markdown', { includeEmails: false });
++  assert.match(mdOut.successful, /# Successful Commit Archive/);
++  assert.match(mdOut.failed, /# Failed \/ Regression Commit Archive/);
++});
++
++test('computeGitHubCooldown applies polite pacing and rate-limit recovery waits', () => {
++  const authHealthy = computeGitHubCooldown({
++    status: 200,
++    remainingHeader: '4900',
++    resetHeader: null,
++    retryAfterHeader: null,
++    isAuthenticated: true,
++  });
++  assert.equal(authHealthy.waitMs, 180);
++  assert.equal(authHealthy.shouldRetry, false);
++
++  const unauthHealthy = computeGitHubCooldown({
++    status: 200,
++    remainingHeader: '55',
++    resetHeader: null,
++    retryAfterHeader: null,
++    isAuthenticated: true,
++  });
++  assert.equal(unauthHealthy.waitMs, 450);
++
++  const lowQuota = computeGitHubCooldown({
++    status: 200,
++    remainingHeader: '12',
++    resetHeader: null,
++    retryAfterHeader: null,
++    isAuthenticated: true,
++  });
++  assert.equal(lowQuota.waitMs, 1500);
++
++  const retryAfter = computeGitHubCooldown({
++    status: 429,
++    remainingHeader: '0',
++    resetHeader: null,
++    retryAfterHeader: '6',
++    isAuthenticated: true,
++  });
++  assert.equal(retryAfter.shouldRetry, true);
++  assert.equal(retryAfter.waitMs, 6250);
++
++  const longWait = computeGitHubCooldown({
++    status: 403,
++    remainingHeader: '0',
++    resetHeader: String(Math.floor(Date.now() / 1000) + 600),
++    retryAfterHeader: null,
++    isAuthenticated: false,
++  });
++  assert.equal(longWait.shouldRetry, false);
++  assert.ok(longWait.fatalError);
++});
++
++test('computeAiBatchCooldownMs enforces inter-batch and exponential retry backoff', () => {
++  assert.equal(computeAiBatchCooldownMs(0), 1200);
++  assert.equal(computeAiBatchCooldownMs(1), 2500);
++  assert.equal(computeAiBatchCooldownMs(2), 5000);
++  assert.equal(computeAiBatchCooldownMs(1, 7), 7300);
++});
++
++test('reconcileDualVerdicts supports gemini-3.1-flash-lite backup verdicts cleanly', () => {
++  const ambigCommit = DEMO_COMMITS.find((c) => c.sha.startsWith('c20911a'))!;
++  const heuristic = {
++    classification: 'successful' as const,
++    confidence: 'low' as const,
++    source: 'heuristic:default',
++    reason: 'Ambiguous',
++    needsAi: true,
++  };
++  const liteVerdict: LlmVerdict = {
++    sha: ambigCommit.sha,
++    classification: 'successful',
++    confidence: 'medium',
++    reason: 'Telemetry interval adjustment without regression cues',
++    footprint: 'perf',
++    model: 'gemini-3.1-flash-lite',
++  };
++
++  const singleBackup = reconcileDualVerdicts(ambigCommit, heuristic, liteVerdict, undefined, 'gemini_only');
++  assert.equal(singleBackup.classified.source, 'ai:gemini-3.1-flash-lite');
++  assert.equal(singleBackup.classified.classification, 'successful');
++});
++
++test('CURATED_PRESETS contains all 23 unique curated GitHub sources including expanded RAG repos', () => {
++  assert.equal(CURATED_PRESETS.length, 23);
++  const values = CURATED_PRESETS.map((p) => p.value);
++  assert.equal(new Set(values).size, 23);
++  for (const expected of [
++    'IBM/mcp-context-forge',
++    'deepseek-ai/DeepSeek-V3',
++    'google-deepmind/deepmind-research',
++    'trekhleb/javascript-algorithms',
++    'firebase/firebase-js-sdk',
++    'langchain-ai/langchain',
++    'run-llama/llama_index',
++    'langgenius/dify',
++    'open-webui/open-webui',
++    'Mintplex-Labs/anything-llm',
++    'FlowiseAI/Flowise',
++    'HKUDS/LightRAG',
++    'deepset-ai/haystack',
++  ]) {
++    assert.ok(values.includes(expected), `Missing preset: ${expected}`);
++  }
++});
++
++test('formatClockTimer and formatDurationMs format active and completed durations cleanly', () => {
++  assert.equal(formatClockTimer(0), '00:00');
++  assert.equal(formatClockTimer(9500), '00:09');
++  assert.equal(formatClockTimer(125000), '02:05');
++  assert.equal(formatClockTimer(3661000), '1:01:01');
++  assert.equal(formatDurationMs(420), '420ms');
++  assert.equal(formatDurationMs(4860), '4.9s');
++  assert.equal(formatDurationMs(74000), '1m 14s');
++});
++
++test('selectEngineTreePaths filters tests/dist/minified and prioritizes core runtime engines', () => {
++  const tree = [
++    { path: 'node_modules/pkg/engine.ts', type: 'blob', size: 12000 },
++    { path: 'src/engine/loop_engine.test.ts', type: 'blob', size: 8000 },
++    { path: 'docs/architecture.md', type: 'blob', size: 4000 },
++    { path: 'dist/loop_kernel.min.js', type: 'blob', size: 18000 },
++    { path: 'src/core/loop_execution_engine.ts', type: 'blob', size: 14000 },
++    { path: 'rag/retrieval/hybrid_rerank_engine.py', type: 'blob', size: 9200 },
++  ];
++
++  assert.equal(scoreEngineFilePath('node_modules/pkg/engine.ts', 12000), 0);
++  assert.equal(scoreEngineFilePath('src/engine/loop_engine.test.ts', 8000), 0);
++  assert.equal(scoreEngineFilePath('dist/loop_kernel.min.js', 18000), 0);
++
++  const selected = selectEngineTreePaths(tree, 5);
++  assert.equal(selected.length, 2);
++  assert.deepEqual(
++    selected.map((n) => n.path).sort(),
++    ['rag/retrieval/hybrid_rerank_engine.py', 'src/core/loop_execution_engine.ts']
++  );
++});
++
++test('buildUnredactedEngineRecord preserves 100% verbatim full source with AST symbols and linked commits', () => {
++  // Construct source > 2,500 chars with realistic vendor identifiers (deepseek, openai) to prove zero redaction/truncation
++  const fillerComments = Array.from({ length: 45 }, (_, i) => `  // deepseek + loop telemetry step ${i}`).join('\n');
++  const fullSource = [
++    `import { orchestrate } from './orchestrator';`,
++    `import { callDeepSeekModel } from './vendors/deepseek';`,
++    ``,
++    `export class LoopMutationEngine {`,
++    `  public async executeCycle(input: string): Promise<string> {`,
++    fillerComments,
++    `    return callDeepSeekModel(orchestrate(input));`,
++    `  }`,
++    `}`,
++    ``,
++    `export function verifyLoopEngineIntegrity(code: string): boolean {`,
++    `  return code.includes('END_OF_UNREDACTED_ENGINE_MARKER');`,
++    `}`,
++    `// END_OF_UNREDACTED_ENGINE_MARKER`,
++  ].join('\n');
++
++  assert.ok(fullSource.length > 2000);
++
++  const ast = scanEngineAst(fullSource, 'src/core/loop_mutation_engine.ts');
++  assert.equal(ast.language, 'TypeScript');
++  assert.equal(ast.role, 'agent-loop');
++  assert.ok(ast.classNames.includes('LoopMutationEngine'));
++  assert.ok(ast.functionNames.includes('verifyLoopEngineIntegrity'));
++  assert.ok(ast.imports.includes('./vendors/deepseek'));
++
++  const record = buildUnredactedEngineRecord({
++    repo: 'craighckby-stack/V1',
++    branch: 'Original',
++    filePath: 'src/core/loop_mutation_engine.ts',
++    rawUrl: 'https://raw.githubusercontent.com/craighckby-stack/V1/Original/src/core/loop_mutation_engine.ts',
++    fullCode: fullSource,
++    repoCommits: [
++      {
++        sha: 'abc1234567890',
++        repo: 'craighckby-stack/V1',
++        isPrivate: false,
++        branches: ['Original'],
++        message: 'feat: harden LoopMutationEngine retry handling',
++        authorName: 'Craig H.',
++        date: '2026-10-15T10:00:00Z',
++      },
++    ],
++  });
++
++  assert.equal(record.redacted, false);
++  assert.equal(record.fullCode, fullSource);
++  assert.ok(record.fullCode.includes('callDeepSeekModel'));
++  assert.ok(record.fullCode.includes('END_OF_UNREDACTED_ENGINE_MARKER'));
++  assert.deepEqual(record.relatedCommitShas, ['abc1234567890']);
++});
++
++test('formatSplitArchives exports full unredacted engines and LOOP summary across JSON, Markdown, and CSV', () => {
++  const sampleCommits: ClassifiedCommit[] = [
++    {
++      ...DEMO_COMMITS[0],
++      classification: 'successful',
++      confidence: 'high',
++      source: 'heuristic:ci-passed',
++      reason: 'CI passed',
++      footprint: 'feat (sync)',
++    },
++    {
++      ...DEMO_COMMITS[1],
++      classification: 'failed',
++      confidence: 'high',
++      source: 'heuristic:ci-failed',
++      reason: 'CI failed',
++      footprint: 'wip',
++    },
++  ];
++
++  const jsonOut = formatSplitArchives(sampleCommits, 'json', { includeEmails: false }, DEMO_ENGINES);
++  assert.equal(jsonOut.enginesCount, 2);
++  const parsedEngines = JSON.parse(jsonOut.engines);
++  assert.equal(parsedEngines.redacted, false);
++  assert.equal(parsedEngines.engines.length, 2);
++  assert.equal(parsedEngines.engines[0].fullCode, DEMO_ENGINES[0].fullCode);
++  assert.equal(parsedEngines.loopMemory.failedCount, 1);
++
++  const mdOut = formatSplitArchives(sampleCommits, 'markdown', { includeEmails: false }, DEMO_ENGINES);
++  assert.match(mdOut.engines, /Redacted: false/);
++  assert.ok(mdOut.engines.includes(DEMO_ENGINES[0].fullCode));
++  assert.ok(mdOut.engines.includes(DEMO_ENGINES[1].fullCode));
++
++  const csvOut = formatSplitArchives(sampleCommits, 'csv', { includeEmails: false }, DEMO_ENGINES);
++  assert.ok(csvOut.engines.includes('LoopMutationGateEngine'));
++  assert.ok(csvOut.engines.includes('hybrid_rerank_fusion'));
++});
++
++test('computeGitHubCooldown retries headerless HTTP 403 secondary rate limits cleanly', () => {
++  const sec403 = computeGitHubCooldown({
++    status: 403,
++    remainingHeader: '4120',
++    resetHeader: null,
++    retryAfterHeader: null,
++    isAuthenticated: true,
++  });
++  assert.equal(sec403.shouldRetry, true);
++  assert.equal(sec403.waitMs, 8000);
++});
++
++test('fetchWithTimeout aborts hung fetches instead of hanging forever', async () => {
++  const originalFetch = globalThis.fetch;
++  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) =>
++    new Promise((_resolve, reject) => {
++      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
++    })) as typeof fetch;
++
++  try {
++    await assert.rejects(
++      () => fetchWithTimeout('https://example.invalid/hung', {}, 50),
++      /Request timed out/
++    );
++  } finally {
++    globalThis.fetch = originalFetch;
++  }
++});
++
++test('detectRevertedShas handles 10,000 commits quickly via prefix indexing', () => {
++  const hugeList = Array.from({ length: 10_000 }, (_, i) => ({
++    sha: i.toString(16).padStart(40, '0'),
++    repo: 'org/huge',
++    isPrivate: false,
++    branches: ['main'],
++    message: i === 500 ? `Revert "fix"\n\nThis reverts commit ${(42).toString(16).padStart(40, '0')}.` : `chore: step ${i}`,
++    authorName: 'Dev',
++    date: '2026-11-01T00:00:00Z',
++  }));
++  const started = Date.now();
++  const reverted = detectRevertedShas(hugeList);
++  const elapsed = Date.now() - started;
++  assert.equal(reverted.has((42).toString(16).padStart(40, '0')), true);
++  assert.ok(elapsed < 1000, `Expected <1000ms for 10k commits, took ${elapsed}ms`);
++});
++
++test('isTerminalAiQuotaOrOfflineError detects quota exhaustion and offline conditions immediately', () => {
++  assert.equal(isTerminalAiQuotaOrOfflineError('Gemini quota exceeded (429 RESOURCE_EXHAUSTED)'), true);
++  assert.equal(isTerminalAiQuotaOrOfflineError('NVIDIA API key is missing.'), true);
++  assert.equal(isTerminalAiQuotaOrOfflineError('Failed to fetch'), true);
++  assert.equal(isTerminalAiQuotaOrOfflineError('Request timed out after 60s'), true);
++  assert.equal(isTerminalAiQuotaOrOfflineError('Unexpected JSON syntax error'), false);
++});
++
++
++
++
+diff --git a/src/utils/demoData.ts b/src/utils/demoData.ts
+new file mode 100644
+index 0000000..a5d2635
+--- /dev/null
++++ b/src/utils/demoData.ts
+@@ -0,0 +1,239 @@
++import type { GitHubUser, RawCommit, RepoSummary, SiphonedEngine } from '../types/git';
++import { buildUnredactedEngineRecord } from './engineHarvester';
++
++export const DEMO_USER: GitHubUser = {
++  login: 'craighckby-stack',
++  name: 'Craig H.',
++  public_repos: 14,
++  total_private_repos: 4,
++};
++
++export const DEMO_REPOS: RepoSummary[] = [
++  {
++    full_name: 'craighckby-stack/V1',
++    name: 'V1',
++    owner: 'craighckby-stack',
++    private: true,
++    fork: false,
++    default_branch: 'main',
++    html_url: 'https://github.com/craighckby-stack/V1',
++  },
++  {
++    full_name: 'infiniflow/ragflow',
++    name: 'ragflow',
++    owner: 'infiniflow',
++    private: false,
++    fork: false,
++    default_branch: 'main',
++    html_url: 'https://github.com/infiniflow/ragflow',
++  },
++  {
++    full_name: 'vercel/next.js',
++    name: 'next.js',
++    owner: 'vercel',
++    private: false,
++    fork: false,
++    default_branch: 'canary',
++    html_url: 'https://github.com/vercel/next.js',
++  },
++];
++
++export const DEMO_COMMITS: RawCommit[] = [
++  {
++    sha: '8a4f21c9d03e7b11a5f42d8b2e7e0190c31f44a1',
++    repo: 'craighckby-stack/V1',
++    isPrivate: true,
++    branches: ['main', 'feat/dual-ai'],
++    message: 'feat(sync): add multi-branch commit deduplication and split archive writer\n\nVerified against 3 branches with zero duplicate SHAs.',
++    authorName: 'Craig H.',
++    authorLogin: 'craighckby-stack',
++    authorEmail: 'craighckby@gmail.com',
++    date: '2026-11-18T19:42:10Z',
++    ciState: 'success',
++  },
++  {
++    sha: '3b91c0441122e77a8c90123d4e5f6a7b8c9d0e11',
++    repo: 'craighckby-stack/V1',
++    isPrivate: true,
++    branches: ['fix/auth-race'],
++    message: 'wip: experimental token cache middleware (broken on Safari private mode)',
++    authorName: 'Craig H.',
++    authorLogin: 'craighckby-stack',
++    authorEmail: 'craighckby@gmail.com',
++    date: '2026-11-17T14:11:05Z',
++    ciState: 'failure',
++  },
++  {
++    sha: 'f402a88e712b90c3d4112233445566778899aabb',
++    repo: 'craighckby-stack/V1',
++    isPrivate: true,
++    branches: ['main'],
++    message: 'refactor(classifier): adjust branch scan batching window for GitHub rate limits',
++    authorName: 'Craig H.',
++    authorLogin: 'craighckby-stack',
++    authorEmail: 'craighckby@gmail.com',
++    date: '2026-11-16T09:18:33Z',
++    ciState: 'unknown',
++  },
++  {
++    sha: '9c71e2b3a4f50987654321fedcba9876543210aa',
++    repo: 'craighckby-stack/V1',
++    isPrivate: true,
++    branches: ['main'],
++    message: 'Revert "refactor(classifier): adjust branch scan batching window for GitHub rate limits"\n\nThis reverts commit f402a88e712b90c3d4112233445566778899aabb due to pagination skip under 30+ branches.',
++    authorName: 'Craig H.',
++    authorLogin: 'craighckby-stack',
++    authorEmail: 'craighckby@gmail.com',
++    date: '2026-11-16T11:04:19Z',
++    ciState: 'success',
++  },
++  {
++    sha: 'c20911ad773e412098ab34cd56ef789012345678',
++    repo: 'infiniflow/ragflow',
++    isPrivate: false,
++    branches: ['main'],
++    message: 'perf(retrieval): tune hybrid vector + BM25 reranker chunk window',
++    authorName: 'Kevin Hu',
++    authorLogin: 'kevinhu',
++    date: '2026-11-15T22:09:44Z',
++    ciState: 'unknown',
++  },
++  {
++    sha: 'd55102be884c1234567890abcdef1234567890cd',
++    repo: 'infiniflow/ragflow',
++    isPrivate: false,
++    branches: ['main', 'release/v0.14'],
++    message: 'fix(parser): guard PDF table extraction against malformed colspan cells (verified)',
++    authorName: 'Zhichao L.',
++    authorLogin: 'zhichaol',
++    date: '2026-11-14T16:30:00Z',
++    ciState: 'success',
++  },
++  {
++    sha: 'e77319df995a00112233445566778899aabbccdd',
++    repo: 'vercel/next.js',
++    isPrivate: false,
++    branches: ['canary'],
++    message: 'turbopack: skip stale persistent cache entry when lockfile hash shifts',
++    authorName: 'Tobias Koppers',
++    authorLogin: 'sokra',
++    date: '2026-11-13T10:15:27Z',
++    ciState: 'unknown',
++  },
++  {
++    sha: 'a11844bc220f99887766554433221100ffeeddcc',
++    repo: 'vercel/next.js',
++    isPrivate: false,
++    branches: ['canary', 'fix/flight-stream'],
++    message: 'test(flight): add regression coverage for aborted RSC stream boundaries',
++    authorName: 'Jiachi Liu',
++    authorLogin: 'huozhi',
++    date: '2026-11-12T18:52:01Z',
++    ciState: 'failure',
++  },
++];
++
++const V1_LOOP_GATE_ENGINE_CODE = `import type { ClassifiedCommit, SiphonedEngine } from './types';
++
++export interface MutationCandidate {
++  id: string;
++  targetFile: string;
++  patchSummary: string;
++  touchedSymbols: string[];
++}
++
++export interface GateDecision {
++  accepted: boolean;
++  reason: string;
++  matchedFailureSha?: string;
++}
++
++export class LoopMutationGateEngine {
++  private readonly failedCommits: ClassifiedCommit[];
++  private readonly engines: SiphonedEngine[];
++
++  constructor(failedCommits: ClassifiedCommit[], engines: SiphonedEngine[]) {
++    this.failedCommits = failedCommits;
++    this.engines = engines;
++  }
++
++  public evaluateCandidate(candidate: MutationCandidate): GateDecision {
++    const normalizedFile = candidate.targetFile.toLowerCase();
++    for (const regression of this.failedCommits) {
++      const msgLower = regression.message.toLowerCase();
++      if (msgLower.includes(normalizedFile) || candidate.touchedSymbols.some((s) => msgLower.includes(s.toLowerCase()))) {
++        return {
++          accepted: false,
++          reason: \`Blocked by prior regression history: \${regression.reason}\`,
++          matchedFailureSha: regression.sha,
++        };
++      }
++    }
++
++    const referenceEngine = this.engines.find((e) => e.filePath.toLowerCase().includes(normalizedFile));
++    if (referenceEngine && referenceEngine.redacted === false) {
++      return {
++        accepted: true,
++        reason: \`Verified against full unredacted engine (\${referenceEngine.lineCount} lines).\`,
++      };
++    }
++
++    return {
++      accepted: true,
++      reason: 'No known regression conflicts detected in LOOP memory.',
++    };
++  }
++}
++`;
++
++const RAGFLOW_RETRIEVER_ENGINE_CODE = `from dataclasses import dataclass
++from typing import List, Dict
++
++@dataclass
++class RankedChunk:
++    chunk_id: str
++    vector_score: float
++    bm25_score: float
++    fused_score: float
++
++def hybrid_rerank_fusion(
++    vector_hits: Dict[str, float],
++    bm25_hits: Dict[str, float],
++    vector_weight: float = 0.65,
++    top_k: int = 12,
++) -> List[RankedChunk]:
++    bm25_weight = 1.0 - vector_weight
++    all_ids = set(vector_hits.keys()) | set(bm25_hits.keys())
++    scored: List[RankedChunk] = []
++
++    for cid in all_ids:
++        v_score = vector_hits.get(cid, 0.0)
++        b_score = bm25_hits.get(cid, 0.0)
++        fused = (v_score * vector_weight) + (b_score * bm25_weight)
++        scored.append(RankedChunk(chunk_id=cid, vector_score=v_score, bm25_score=b_score, fused_score=fused))
++
++    scored.sort(key=lambda item: item.fused_score, reverse=True)
++    return scored[:top_k]
++`;
++
++export const DEMO_ENGINES: SiphonedEngine[] = [
++  buildUnredactedEngineRecord({
++    repo: 'craighckby-stack/V1',
++    branch: 'Original',
++    filePath: 'src/loop_mutation_gate_engine.ts',
++    rawUrl: 'https://raw.githubusercontent.com/craighckby-stack/V1/Original/src/loop_mutation_gate_engine.ts',
++    fullCode: V1_LOOP_GATE_ENGINE_CODE,
++    repoCommits: DEMO_COMMITS.filter((c) => c.repo === 'craighckby-stack/V1'),
++    harvestedAt: '2026-11-18T20:00:00Z',
++  }),
++  buildUnredactedEngineRecord({
++    repo: 'infiniflow/ragflow',
++    branch: 'main',
++    filePath: 'rag/retrieval/hybrid_rerank_engine.py',
++    rawUrl: 'https://raw.githubusercontent.com/infiniflow/ragflow/main/rag/retrieval/hybrid_rerank_engine.py',
++    fullCode: RAGFLOW_RETRIEVER_ENGINE_CODE,
++    repoCommits: DEMO_COMMITS.filter((c) => c.repo === 'infiniflow/ragflow'),
++    harvestedAt: '2026-11-18T20:00:00Z',
++  }),
++];
++
+diff --git a/src/utils/engineHarvester.ts b/src/utils/engineHarvester.ts
+new file mode 100644
+index 0000000..7320f30
+--- /dev/null
++++ b/src/utils/engineHarvester.ts
+@@ -0,0 +1,313 @@
++import type { EngineRole, RawCommit, SiphonedEngine } from '../types/git';
++
++export interface GitTreeNode {
++  path: string;
++  type: 'blob' | 'tree' | string;
++  size?: number;
++  sha?: string;
++}
++
++const SUPPORTED_EXT_MAP: Record<string, string> = {
++  '.ts': 'TypeScript',
++  '.tsx': 'TypeScript',
++  '.mts': 'TypeScript',
++  '.cts': 'TypeScript',
++  '.js': 'JavaScript',
++  '.jsx': 'JavaScript',
++  '.mjs': 'JavaScript',
++  '.cjs': 'JavaScript',
++  '.py': 'Python',
++  '.go': 'Go',
++  '.rs': 'Rust',
++};
++
++const EXCLUDED_PATH_PATTERN =
++  /(^|\/)(node_modules|vendor|dist|build|out|target|\.next|\.git|__pycache__|\.venv|venv|coverage|fixtures?|mocks?|__tests__|tests?|spec|examples?|docs?|stories|storybook|migrations?|locale|locales|i18n|assets|public|static|benchmarks?)(\/|$)/i;
++
++const EXCLUDED_FILE_PATTERN =
++  /(\.min\.|\.bundle\.|\.d\.ts$|\.(test|spec|stories|mock|fixture)\.[a-z]+$|_test\.(go|py|rs|ts|js)$|test_[^/]+\.py$|setup\.py$|conftest\.py$)/i;
++
++const HIGH_VALUE_ENGINE_KEYWORDS =
++  /(engine|agent|loop|kernel|runtime|orchestrat|pipeline|graph|workflow|executor|mutation|tribunal|gate|retriever|retrieval|rag|vector|embed|indexer|rerank|sandbox|memory|router|scheduler|state_machine|statemachine|queue|worker|harness|eval|core)/i;
++
++const MEDIUM_VALUE_DIR_PATTERN =
++  /(^|\/)(src|core|pkg|internal|lib|app|server|backend|api|packages|modules|services)(\/|$)/i;
++
++const MAX_ENGINE_FILE_BYTES = 500_000;
++
++export function detectEngineLanguage(filePath: string): string | null {
++  const lower = filePath.toLowerCase();
++  for (const [ext, lang] of Object.entries(SUPPORTED_EXT_MAP)) {
++    if (lower.endsWith(ext)) return lang;
++  }
++  return null;
++}
++
++/**
++ * Scores a repository tree blob path to identify high-signal runtime engines
++ * without touching tests, build outputs, docs, or gigantic minified bundles.
++ * Returns <= 0 when the file should be skipped.
++ */
++export function scoreEngineFilePath(filePath: string, size?: number): number {
++  const clean = filePath.replace(/^\/+/, '');
++  const lang = detectEngineLanguage(clean);
++  if (!lang) return 0;
++
++  if (typeof size === 'number' && (size <= 40 || size > MAX_ENGINE_FILE_BYTES)) {
++    return 0;
++  }
++
++  if (EXCLUDED_PATH_PATTERN.test(clean) || EXCLUDED_FILE_PATTERN.test(clean)) {
++    return 0;
++  }
++
++  const fileName = clean.split('/').pop() || clean;
++  if (/^(index|__init__|mod|main|types|constants|config|settings)\.[a-z]+$/i.test(fileName)) {
++    // Allow main/index only if inside an explicit engine/core/loop folder
++    if (!/(engine|loop|kernel|runtime|agent|orchestrat|rag|retriev|pipeline|sandbox|memory)/i.test(clean)) {
++      return 0;
++    }
++  }
++
++  let score = 0;
++  const pathMatches = clean.match(new RegExp(HIGH_VALUE_ENGINE_KEYWORDS.source, 'gi'));
++  if (pathMatches) {
++    score += pathMatches.length * 30;
++  }
++
++  if (HIGH_VALUE_ENGINE_KEYWORDS.test(fileName)) {
++    score += 45;
++  }
++
++  if (MEDIUM_VALUE_DIR_PATTERN.test(clean)) {
++    score += 12;
++  }
++
++  // Prefer substantive files (> 1.5KB) over tiny helpers
++  if (typeof size === 'number') {
++    if (size >= 2000 && size <= 120_000) score += 18;
++    else if (size >= 600) score += 8;
++  }
++
++  // Slightly prefer shallower canonical modules over deeply nested leaves
++  const depth = clean.split('/').length;
++  score -= Math.max(0, depth - 3) * 3;
++
++  return score;
++}
++
++/**
++ * Selects the top-scored runtime engine paths from a repository Git tree in a single pass.
++ */
++export function selectEngineTreePaths(treeNodes: GitTreeNode[], maxPerRepo = 12): GitTreeNode[] {
++  const scored: Array<{ node: GitTreeNode; score: number }> = [];
++
++  for (const node of treeNodes) {
++    if (node.type !== 'blob' || !node.path) continue;
++    const score = scoreEngineFilePath(node.path, node.size);
++    if (score >= 40) {
++      scored.push({ node, score });
++    }
++  }
++
++  scored.sort((a, b) => {
++    if (b.score !== a.score) return b.score - a.score;
++    return (b.node.size ?? 0) - (a.node.size ?? 0);
++  });
++
++  return scored.slice(0, maxPerRepo).map((item) => item.node);
++}
++
++export function inferEngineRole(filePath: string, fullCode: string): EngineRole {
++  const combined = `${filePath}\n${fullCode.slice(0, 4000)}`.toLowerCase();
++  if (/(loop|mutation|tribunal|agent|autonomous|self_mod|self-mod)/.test(combined)) {
++    return 'agent-loop';
++  }
++  if (/(rag|retriev|vector|embed|bm25|rerank|hybrid_search|knowledge_graph|lightrag)/.test(combined)) {
++    return 'rag-retrieval';
++  }
++  if (/(orchestrat|workflow|pipeline|dag|graph|state_machine|scheduler)/.test(combined)) {
++    return 'orchestrator';
++  }
++  if (/(sandbox|container|docker|wasm|isolate|subprocess|executor)/.test(combined)) {
++    return 'execution-sandbox';
++  }
++  if (/(memory|checkpoint|lesson|episodic|store|cache|persist)/.test(combined)) {
++    return 'memory-state';
++  }
++  if (/(router|gateway|proxy|rate_limit|balancer|dispatch)/.test(combined)) {
++    return 'router-gateway';
++  }
++  return 'core-runtime';
++}
++
++function uniqueOrdered(items: string[], max = 40): string[] {
++  const seen = new Set<string>();
++  const out: string[] = [];
++  for (const item of items) {
++    const clean = item.trim();
++    if (!clean || seen.has(clean)) continue;
++    seen.add(clean);
++    out.push(clean);
++    if (out.length >= max) break;
++  }
++  return out;
++}
++
++/**
++ * Extracts AST-level structural metadata (classes, functions, imports, line/byte size, role)
++ * from complete engine source code WITHOUT altering, redacting, or slicing `fullCode`.
++ */
++export function scanEngineAst(fullCode: string, filePath: string): {
++  language: string;
++  role: EngineRole;
++  byteSize: number;
++  lineCount: number;
++  classNames: string[];
++  functionNames: string[];
++  imports: string[];
++} {
++  const language = detectEngineLanguage(filePath) || 'Source';
++  const role = inferEngineRole(filePath, fullCode);
++  const byteSize = new TextEncoder().encode(fullCode).length;
++  const lineCount = fullCode.length === 0 ? 0 : fullCode.split(/\r?\n/).length;
++
++  const classes: string[] = [];
++  const functions: string[] = [];
++  const imports: string[] = [];
++
++  let m: RegExpExecArray | null;
++
++  if (language === 'Python') {
++    const pyClassRx = /^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
++    while ((m = pyClassRx.exec(fullCode)) !== null) classes.push(m[1]);
++
++    const pyFnRx = /^\s*(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm;
++    while ((m = pyFnRx.exec(fullCode)) !== null) functions.push(m[1]);
++
++    const pyImpRx = /^\s*(?:from\s+([A-Za-z0-9_.]+)\s+import|import\s+([A-Za-z0-9_.]+))/gm;
++    while ((m = pyImpRx.exec(fullCode)) !== null) imports.push(m[1] || m[2]);
++  } else if (language === 'Go') {
++    const goTypeRx = /^\s*type\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:struct|interface)\b/gm;
++    while ((m = goTypeRx.exec(fullCode)) !== null) classes.push(m[1]);
++
++    const goFnRx = /^\s*func\s+(?:\([^)]+\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\(/gm;
++    while ((m = goFnRx.exec(fullCode)) !== null) functions.push(m[1]);
++
++    const goImpRx = /"([A-Za-z0-9_.\-/]+)"/g;
++    const impBlockMatch = fullCode.match(/import\s*(?:\([\s\S]*?\)|"[^"]+")/g);
++    if (impBlockMatch) {
++      for (const blk of impBlockMatch) {
++        while ((m = goImpRx.exec(blk)) !== null) imports.push(m[1]);
++      }
++    }
++  } else if (language === 'Rust') {
++    const rsTypeRx = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait)\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
++    while ((m = rsTypeRx.exec(fullCode)) !== null) classes.push(m[1]);
++
++    const rsFnRx = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
++    while ((m = rsFnRx.exec(fullCode)) !== null) functions.push(m[1]);
++
++    const rsUseRx = /^\s*(?:pub\s+)?use\s+([A-Za-z0-9_:]+)/gm;
++    while ((m = rsUseRx.exec(fullCode)) !== null) imports.push(m[1]);
++  } else {
++    // TypeScript / JavaScript
++    const tsClassRx = /\b(?:class|interface)\s+([A-Za-z_$][A-Za-z0-9_$]*)/g;
++    while ((m = tsClassRx.exec(fullCode)) !== null) classes.push(m[1]);
++
++    const tsFnRx =
++      /(?:^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*[<(]|^\s*(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][A-Za-z0-9_$]*)\s*=>)/gm;
++    while ((m = tsFnRx.exec(fullCode)) !== null) functions.push(m[1] || m[2]);
++
++    const tsImpRx = /^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
++    while ((m = tsImpRx.exec(fullCode)) !== null) imports.push(m[1]);
++  }
++
++  return {
++    language,
++    role,
++    byteSize,
++    lineCount,
++    classNames: uniqueOrdered(classes),
++    functionNames: uniqueOrdered(functions),
++    imports: uniqueOrdered(imports),
++  };
++}
++
++/**
++ * Cross-links commits extracted in the same repository pass that reference the
++ * siphoned engine file name, module stem, or declared primary class/function.
++ */
++export function linkCommitsToEngine(
++  filePath: string,
++  classNames: string[],
++  functionNames: string[],
++  repoCommits: RawCommit[]
++): string[] {
++  const fileName = (filePath.split('/').pop() || filePath).toLowerCase();
++  const stem = fileName.replace(/\.[a-z0-9]+$/i, '');
++  const terms = new Set<string>([filePath.toLowerCase(), fileName]);
++  if (stem.length >= 4) terms.add(stem);
++  for (const cls of classNames.slice(0, 6)) {
++    if (cls.length >= 4) terms.add(cls.toLowerCase());
++  }
++  for (const fn of functionNames.slice(0, 6)) {
++    if (fn.length >= 5) terms.add(fn.toLowerCase());
++  }
++
++  const matched: string[] = [];
++  for (const commit of repoCommits) {
++    const msg = commit.message.toLowerCase();
++    for (const term of terms) {
++      if (msg.includes(term)) {
++        matched.push(commit.sha);
++        break;
++      }
++    }
++    if (matched.length >= 25) break;
++  }
++
++  return matched;
++}
++
++/**
++ * Builds an unredacted SiphonedEngine record from full raw source text.
++ */
++export function buildUnredactedEngineRecord(params: {
++  repo: string;
++  branch: string;
++  filePath: string;
++  rawUrl: string;
++  treeSha?: string;
++  fullCode: string;
++  repoCommits: RawCommit[];
++  harvestedAt?: string;
++}): SiphonedEngine {
++  const ast = scanEngineAst(params.fullCode, params.filePath);
++  const relatedCommitShas = linkCommitsToEngine(
++    params.filePath,
++    ast.classNames,
++    ast.functionNames,
++    params.repoCommits
++  );
++
++  return {
++    id: `${params.repo}@${params.branch}:${params.filePath}`,
++    repo: params.repo,
++    branch: params.branch,
++    ...(params.treeSha ? { treeSha: params.treeSha } : {}),
++    filePath: params.filePath,
++    rawUrl: params.rawUrl,
++    language: ast.language,
++    role: ast.role,
++    byteSize: ast.byteSize,
++    lineCount: ast.lineCount,
++    classNames: ast.classNames,
++    functionNames: ast.functionNames,
++    imports: ast.imports,
++    relatedCommitShas,
++    redacted: false,
++    fullCode: params.fullCode,
++    harvestedAt: params.harvestedAt ?? new Date().toISOString(),
++  };
++}
+diff --git a/src/utils/formatter.ts b/src/utils/formatter.ts
+new file mode 100644
+index 0000000..f6342e0
+--- /dev/null
++++ b/src/utils/formatter.ts
+@@ -0,0 +1,398 @@
++import type { ArchiveFormat, ClassifiedCommit, SiphonedEngine } from '../types/git';
++
++export interface SplitArchiveOutputs {
++  successful: string;
++  failed: string;
++  engines: string;
++  successfulCount: number;
++  failedCount: number;
++  enginesCount: number;
++  combinedBytes: number;
++}
++
++export interface LoopSynthesisSummary {
++  totalCommits: number;
++  successfulCount: number;
++  failedCount: number;
++  enginesCount: number;
++  provenPatterns: Array<{ repo: string; sha: string; footprint: string; summary: string }>;
++  regressionGuards: Array<{ repo: string; sha: string; footprint: string; reason: string }>;
++}
++
++/**
++ * Synthesizes LOOP-compatible procedural memory guards from classified commits and siphoned engines.
++ */
++export function synthesizeLoopSummary(
++  commits: ClassifiedCommit[],
++  engines: SiphonedEngine[]
++): LoopSynthesisSummary {
++  const ok = commits.filter((c) => c.classification === 'successful');
++  const bad = commits.filter((c) => c.classification === 'failed');
++
++  return {
++    totalCommits: commits.length,
++    successfulCount: ok.length,
++    failedCount: bad.length,
++    enginesCount: engines.length,
++    provenPatterns: ok.slice(0, 12).map((c) => ({
++      repo: c.repo,
++      sha: c.sha.slice(0, 7),
++      footprint: c.footprint,
++      summary: c.message.split('\n')[0].trim(),
++    })),
++    regressionGuards: bad.slice(0, 12).map((c) => ({
++      repo: c.repo,
++      sha: c.sha.slice(0, 7),
++      footprint: c.footprint,
++      reason: c.reason,
++    })),
++  };
++}
++
++function escapeCsvCell(value: string): string {
++  const normalized = value.replace(/\r?\n/g, ' ');
++  if (/[",]/.test(normalized)) {
++    return `"${normalized.replace(/"/g, '""')}"`;
++  }
++  return normalized;
++}
++
++/**
++ * Escapes CSV cells while preserving exact newlines inside unredacted full source code.
++ */
++function escapeCsvPreserveMultiline(value: string): string {
++  if (/[\r\n",]/.test(value)) {
++    return `"${value.replace(/"/g, '""')}"`;
++  }
++  return value;
++}
++
++function formatJsonLog(
++  commits: ClassifiedCommit[],
++  label: 'successful' | 'failed',
++  generatedAt: string,
++  includeEmails: boolean
++): string {
++  const records = commits.map((c) => {
++    const base: Record<string, unknown> = {
++      sha: c.sha,
++      repo: c.repo,
++      branches: c.branches,
++      date: c.date,
++      authorName: c.authorName,
++      ...(c.authorLogin ? { authorLogin: c.authorLogin } : {}),
++      ...(includeEmails && c.authorEmail ? { authorEmail: c.authorEmail } : {}),
++      classification: c.classification,
++      confidence: c.confidence,
++      source: c.source,
++      footprint: c.footprint,
++      reason: c.reason,
++      message: c.message,
++      ...(c.htmlUrl ? { url: c.htmlUrl } : {}),
++    };
++    return base;
++  });
++
++  return JSON.stringify(
++    {
++      schema: 'githistory-sync/v3',
++      bucket: label,
++      generatedAt,
++      count: records.length,
++      commits: records,
++    },
++    null,
++    2
++  );
++}
++
++function formatJsonEnginesLog(
++  engines: SiphonedEngine[],
++  commits: ClassifiedCommit[],
++  generatedAt: string
++): string {
++  const loopSummary = synthesizeLoopSummary(commits, engines);
++  return JSON.stringify(
++    {
++      schema: 'githistory-sync/engines-v1',
++      bucket: 'engines',
++      redacted: false,
++      generatedAt,
++      count: engines.length,
++      loopMemory: loopSummary,
++      engines: engines.map((e) => ({
++        id: e.id,
++        repo: e.repo,
++        branch: e.branch,
++        ...(e.treeSha ? { treeSha: e.treeSha } : {}),
++        filePath: e.filePath,
++        rawUrl: e.rawUrl,
++        language: e.language,
++        role: e.role,
++        byteSize: e.byteSize,
++        lineCount: e.lineCount,
++        classNames: e.classNames,
++        functionNames: e.functionNames,
++        imports: e.imports,
++        relatedCommitShas: e.relatedCommitShas,
++        redacted: false,
++        harvestedAt: e.harvestedAt,
++        fullCode: e.fullCode,
++      })),
++    },
++    null,
++    2
++  );
++}
++
++function formatMarkdownLog(
++  commits: ClassifiedCommit[],
++  label: 'successful' | 'failed',
++  generatedAt: string,
++  includeEmails: boolean
++): string {
++  const title = label === 'successful' ? 'Successful Commit Archive' : 'Failed / Regression Commit Archive';
++  const lines: string[] = [
++    `# ${title}`,
++    '',
++    `- Generated: ${generatedAt}`,
++    `- Total Commits: ${commits.length}`,
++    '',
++    '| Date | Repo | Branches | SHA | Footprint | Confidence | Source | Author | Summary | Reason |',
++    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
++  ];
++
++  for (const c of commits) {
++    const subject = c.message.split('\n')[0].replace(/\|/g, '\\|').trim();
++    const reason = c.reason.replace(/\|/g, '\\|').trim();
++    const author =
++      includeEmails && c.authorEmail ? `${c.authorName} <${c.authorEmail}>` : c.authorName;
++    lines.push(
++      `| ${c.date.slice(0, 10)} | ${c.repo} | ${c.branches.join(', ')} | \`${c.sha.slice(0, 7)}\` | ${c.footprint} | ${c.confidence} | ${c.source} | ${author.replace(/\|/g, '\\|')} | ${subject} | ${reason} |`
++    );
++  }
++
++  return lines.join('\n') + '\n';
++}
++
++function mdFenceLang(language: string): string {
++  const lower = language.toLowerCase();
++  if (lower === 'typescript') return 'ts';
++  if (lower === 'javascript') return 'js';
++  if (lower === 'python') return 'python';
++  if (lower === 'go') return 'go';
++  if (lower === 'rust') return 'rust';
++  return '';
++}
++
++function formatMarkdownEnginesLog(
++  engines: SiphonedEngine[],
++  commits: ClassifiedCommit[],
++  generatedAt: string
++): string {
++  const summary = synthesizeLoopSummary(commits, engines);
++  const lines: string[] = [
++    '# Full Unredacted Engine Archive & LOOP Synthesis',
++    '',
++    `- Generated: ${generatedAt}`,
++    `- Total Engines: ${engines.length}`,
++    `- Redacted: false (100% verbatim full source preserved)`,
++    `- Commit Corpus: ${summary.successfulCount} successful · ${summary.failedCount} regression guards`,
++    '',
++  ];
++
++  if (summary.regressionGuards.length > 0) {
++    lines.push('## LOOP Regression Guards (from Failed Commits)', '');
++    for (const guard of summary.regressionGuards.slice(0, 6)) {
++      lines.push(`- **${guard.repo}** \`${guard.sha}\` [${guard.footprint}]: ${guard.reason}`);
++    }
++    lines.push('');
++  }
++
++  for (const engine of engines) {
++    const langTag = mdFenceLang(engine.language);
++    // Use a 4-backtick or longer fence if source contains triple backticks
++    const fence = engine.fullCode.includes('````')
++      ? '`````'
++      : engine.fullCode.includes('```')
++        ? '````'
++        : '```';
++
++    lines.push(
++      `## ${engine.repo} — \`${engine.filePath}\``,
++      '',
++      `- Branch: \`${engine.branch}\` · Language: \`${engine.language}\` · Role: \`${engine.role}\``,
++      `- Size: ${engine.lineCount} lines (${engine.byteSize} bytes) · Redacted: \`false\``,
++      `- Classes: ${engine.classNames.length > 0 ? engine.classNames.join(', ') : 'none'}`,
++      `- Functions: ${engine.functionNames.length > 0 ? engine.functionNames.join(', ') : 'none'}`,
++      `- Imports: ${engine.imports.length > 0 ? engine.imports.slice(0, 16).join(', ') : 'none'}`,
++      `- Linked Commits: ${engine.relatedCommitShas.length > 0 ? engine.relatedCommitShas.map((s) => `\`${s.slice(0, 7)}\``).join(', ') : 'none'}`,
++      `- Raw Source: ${engine.rawUrl}`,
++      '',
++      `${fence}${langTag}`,
++      engine.fullCode,
++      fence,
++      ''
++    );
++  }
++
++  return lines.join('\n') + '\n';
++}
++
++function formatCsvLog(commits: ClassifiedCommit[], includeEmails: boolean): string {
++  const headers = [
++    'sha',
++    'repo',
++    'branches',
++    'date',
++    'author_name',
++    ...(includeEmails ? ['author_email'] : []),
++    'classification',
++    'confidence',
++    'source',
++    'footprint',
++    'reason',
++    'message',
++  ];
++  const rows = [headers.join(',')];
++
++  for (const c of commits) {
++    const cells = [
++      c.sha,
++      c.repo,
++      c.branches.join(';'),
++      c.date,
++      c.authorName,
++      ...(includeEmails ? [c.authorEmail ?? ''] : []),
++      c.classification,
++      c.confidence,
++      c.source,
++      c.footprint,
++      c.reason,
++      c.message,
++    ].map((cell) => escapeCsvCell(String(cell)));
++    rows.push(cells.join(','));
++  }
++
++  return rows.join('\n') + '\n';
++}
++
++function formatCsvEnginesLog(engines: SiphonedEngine[]): string {
++  const headers = [
++    'id',
++    'repo',
++    'branch',
++    'file_path',
++    'language',
++    'role',
++    'line_count',
++    'byte_size',
++    'redacted',
++    'classes',
++    'functions',
++    'imports',
++    'related_commit_shas',
++    'raw_url',
++    'full_code',
++  ];
++  const rows = [headers.join(',')];
++
++  for (const e of engines) {
++    const cells = [
++      escapeCsvCell(e.id),
++      escapeCsvCell(e.repo),
++      escapeCsvCell(e.branch),
++      escapeCsvCell(e.filePath),
++      escapeCsvCell(e.language),
++      escapeCsvCell(e.role),
++      String(e.lineCount),
++      String(e.byteSize),
++      'false',
++      escapeCsvCell(e.classNames.join(';')),
++      escapeCsvCell(e.functionNames.join(';')),
++      escapeCsvCell(e.imports.join(';')),
++      escapeCsvCell(e.relatedCommitShas.join(';')),
++      escapeCsvCell(e.rawUrl),
++      escapeCsvPreserveMultiline(e.fullCode),
++    ];
++    rows.push(cells.join(','));
++  }
++
++  return rows.join('\n') + '\n';
++}
++
++export function formatSplitArchives(
++  commits: ClassifiedCommit[],
++  format: ArchiveFormat,
++  options: { includeEmails: boolean; generatedAt?: string },
++  engines: SiphonedEngine[] = []
++): SplitArchiveOutputs {
++  const generatedAt = options.generatedAt ?? new Date().toISOString();
++  const successfulCommits = commits.filter((c) => c.classification === 'successful');
++  const failedCommits = commits.filter((c) => c.classification === 'failed');
++
++  let successful = '';
++  let failed = '';
++  let enginesOutput = '';
++
++  if (format === 'json') {
++    successful = formatJsonLog(successfulCommits, 'successful', generatedAt, options.includeEmails);
++    failed = formatJsonLog(failedCommits, 'failed', generatedAt, options.includeEmails);
++    enginesOutput = formatJsonEnginesLog(engines, commits, generatedAt);
++  } else if (format === 'markdown') {
++    successful = formatMarkdownLog(successfulCommits, 'successful', generatedAt, options.includeEmails);
++    failed = formatMarkdownLog(failedCommits, 'failed', generatedAt, options.includeEmails);
++    enginesOutput = formatMarkdownEnginesLog(engines, commits, generatedAt);
++  } else {
++    successful = formatCsvLog(successfulCommits, options.includeEmails);
++    failed = formatCsvLog(failedCommits, options.includeEmails);
++    enginesOutput = formatCsvEnginesLog(engines);
++  }
++
++  const encoder = new TextEncoder();
++  const combinedBytes =
++    encoder.encode(successful).length +
++    encoder.encode(failed).length +
++    (engines.length > 0 ? encoder.encode(enginesOutput).length : 0);
++
++  return {
++    successful,
++    failed,
++    engines: enginesOutput,
++    successfulCount: successfulCommits.length,
++    failedCount: failedCommits.length,
++    enginesCount: engines.length,
++    combinedBytes,
++  };
++}
++
++export function formatBytes(bytes: number): string {
++  if (bytes < 1024) return `${bytes} B`;
++  const kb = bytes / 1024;
++  if (kb < 1024) return `${kb.toFixed(1)} KB`;
++  return `${(kb / 1024).toFixed(2)} MB`;
++}
++
++export function formatDurationMs(ms: number): string {
++  const safe = Math.max(0, Math.round(ms));
++  if (safe < 1000) return `${safe}ms`;
++  const totalSec = safe / 1000;
++  if (totalSec < 60) return `${totalSec.toFixed(1)}s`;
++  const mins = Math.floor(totalSec / 60);
++  const secs = Math.floor(totalSec % 60);
++  if (mins < 60) return `${mins}m ${String(secs).padStart(2, '0')}s`;
++  const hrs = Math.floor(mins / 60);
++  const remMins = mins % 60;
++  return `${hrs}h ${String(remMins).padStart(2, '0')}m`;
++}
++
++export function formatClockTimer(ms: number): string {
++  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
++  const hrs = Math.floor(totalSeconds / 3600);
++  const mins = Math.floor((totalSeconds % 3600) / 60);
++  const secs = totalSeconds % 60;
++  if (hrs > 0) {
++    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
++  }
++  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
++}
+diff --git a/src/utils/githubClient.ts b/src/utils/githubClient.ts
+new file mode 100644
+index 0000000..3723b83
+--- /dev/null
++++ b/src/utils/githubClient.ts
+@@ -0,0 +1,729 @@
++import type {
++  BranchScope,
++  CiState,
++  GitHubUser,
++  RawCommit,
++  RepoSummary,
++  SiphonedEngine,
++} from '../types/git';
++import {
++  buildUnredactedEngineRecord,
++  type GitTreeNode,
++  selectEngineTreePaths,
++} from './engineHarvester';
++import { computeGitHubCooldown, fetchWithTimeout, sleepWithAbort } from './rateLimiter';
++import { matchesRepoFilter, parseSources, TOOL_TAG } from './sources';
++
++const GITHUB_API = 'https://api.github.com';
++const GITHUB_REQUEST_TIMEOUT_MS = 30_000;
++
++export interface GitHubResponse<T> {
++  data: T;
++  headers: Headers;
++}
++
++type LogCallback = (msg: string, level?: 'info' | 'warn' | 'success') => void;
++type WaitCallback = (reason: string, waitMs: number) => void;
++
++async function ghRequest<T>(
++  pathOrUrl: string,
++  token: string,
++  init: RequestInit = {},
++  options: { retries?: number; onLog?: LogCallback; onWait?: WaitCallback; skipCooldown?: boolean } = {}
++): Promise<GitHubResponse<T>> {
++  const retries = options.retries ?? 2;
++  const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${GITHUB_API}${pathOrUrl}`;
++  const trimmedToken = token.trim();
++  const isAuthenticated = Boolean(trimmedToken);
++  const signal = init.signal ?? undefined;
++
++  let res: Response;
++  try {
++    res = await fetchWithTimeout(
++      url,
++      {
++        ...init,
++        headers: {
++          Accept: 'application/vnd.github+json',
++          ...(trimmedToken ? { Authorization: `Bearer ${trimmedToken}` } : {}),
++          'X-GitHub-Api-Version': '2022-11-28',
++          ...(init.headers || {}),
++        },
++      },
++      GITHUB_REQUEST_TIMEOUT_MS
++    );
++  } catch (networkErr) {
++    const msg = networkErr instanceof Error ? networkErr.message : String(networkErr);
++    if (signal?.aborted || msg === 'Operation cancelled.') {
++      throw networkErr;
++    }
++    if (retries > 0) {
++      const waitMsg = `GitHub request interrupted (${msg}) — retrying in 2.5s...`;
++      options.onLog?.(waitMsg, 'warn');
++      options.onWait?.(waitMsg, 2500);
++      await sleepWithAbort(2500, signal);
++      return ghRequest<T>(pathOrUrl, token, init, { ...options, retries: retries - 1 });
++    }
++    throw networkErr;
++  }
++
++  const decision = computeGitHubCooldown({
++    status: res.status,
++    remainingHeader: res.headers.get('X-RateLimit-Remaining'),
++    resetHeader: res.headers.get('X-RateLimit-Reset'),
++    retryAfterHeader: res.headers.get('Retry-After'),
++    isAuthenticated,
++  });
++
++  if ((res.status === 403 || res.status === 429) && retries > 0) {
++    if (decision.fatalError) {
++      throw new Error(decision.fatalError);
++    }
++    if (decision.shouldRetry && decision.waitMs > 0) {
++      if (decision.reason) {
++        options.onLog?.(decision.reason, 'warn');
++        options.onWait?.(decision.reason, decision.waitMs);
++      }
++      await sleepWithAbort(decision.waitMs, signal);
++      return ghRequest<T>(pathOrUrl, token, init, { ...options, retries: retries - 1 });
++    }
++  }
++
++  if (!res.ok) {
++    let msg = `GitHub API error (${res.status})`;
++    try {
++      const errBody = (await res.json()) as { message?: string };
++      if (errBody?.message) msg = `${errBody.message} (HTTP ${res.status})`;
++    } catch {
++      // ignore non-json body
++    }
++    throw new Error(msg);
++  }
++
++  // Apply polite pacing cooldown after successful requests so pagination never bursts secondary limits
++  if (!options.skipCooldown && decision.waitMs > 0) {
++    if (decision.reason) {
++      options.onLog?.(decision.reason, 'warn');
++      if (decision.waitMs >= 1500) {
++        options.onWait?.(decision.reason, decision.waitMs);
++      }
++    }
++    await sleepWithAbort(decision.waitMs, signal);
++  }
++
++  if (res.status === 204) {
++    return { data: undefined as T, headers: res.headers };
++  }
++
++  const data = (await res.json()) as T;
++  return { data, headers: res.headers };
++}
++
++function parseNextLink(linkHeader: string | null): string | null {
++  if (!linkHeader) return null;
++  for (const part of linkHeader.split(',')) {
++    const match = /<([^>]+)>;\s*rel="next"/.exec(part.trim());
++    if (match) return match[1];
++  }
++  return null;
++}
++
++export async function verifyGitHubToken(token: string): Promise<{
++  user: GitHubUser;
++  scopes: string | null;
++}> {
++  const { data: user, headers } = await ghRequest<GitHubUser>(
++    '/user',
++    token,
++    {},
++    { skipCooldown: true }
++  );
++  if (!user || !user.login) {
++    throw new Error('GitHub /user response did not include a valid account login.');
++  }
++  return {
++    user,
++    scopes: headers.get('X-OAuth-Scopes'),
++  };
++}
++
++interface RawGhRepo {
++  full_name: string;
++  name: string;
++  owner: { login: string };
++  private: boolean;
++  fork: boolean;
++  default_branch: string;
++  html_url?: string;
++}
++
++function toRepoSummary(r: RawGhRepo): RepoSummary {
++  return {
++    full_name: r.full_name,
++    name: r.name,
++    owner: r.owner.login,
++    private: r.private,
++    fork: r.fork,
++    default_branch: r.default_branch || 'main',
++    html_url: r.html_url,
++  };
++}
++
++export interface DiscoverOptions {
++  includeMine: boolean;
++  includePrivate: boolean;
++  includeForks: boolean;
++  sources: string;
++  repoFilter: string;
++  signal?: AbortSignal;
++}
++
++export async function discoverRepositories(
++  token: string,
++  options: DiscoverOptions,
++  onLog: LogCallback
++): Promise<{ repos: RepoSummary[]; externalOwners: Set<string> }> {
++  const repoMap = new Map<string, RepoSummary>();
++  const externalOwners = new Set<string>();
++  const hasToken = Boolean(token.trim());
++
++  if (options.includeMine && hasToken) {
++    let nextUrl: string | null =
++      `/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member`;
++    while (nextUrl) {
++      if (options.signal?.aborted) throw new Error('Operation cancelled.');
++      const { data, headers } = await ghRequest<RawGhRepo[]>(
++        nextUrl,
++        token,
++        { signal: options.signal },
++        { onLog }
++      );
++      for (const r of data) {
++        if (!options.includePrivate && r.private) continue;
++        if (!options.includeForks && r.fork) continue;
++        if (!matchesRepoFilter(r.full_name, options.repoFilter)) continue;
++        repoMap.set(r.full_name.toLowerCase(), toRepoSummary(r));
++      }
++      nextUrl = parseNextLink(headers.get('Link'));
++    }
++    onLog(`Discovered ${repoMap.size} personal/member repositories.`, 'info');
++  } else if (options.includeMine && !hasToken) {
++    onLog(
++      'No GitHub token verified — skipping private/personal repository discovery and scanning public sources.',
++      'info'
++    );
++  }
++
++  const externalTargets = parseSources(options.sources);
++  for (const target of externalTargets) {
++    if (options.signal?.aborted) throw new Error('Operation cancelled.');
++    if (target.type === 'repo' && target.repo) {
++      const slug = `${target.owner}/${target.repo}`;
++      if (!matchesRepoFilter(slug, options.repoFilter)) continue;
++      if (repoMap.has(slug.toLowerCase())) continue;
++      try {
++        const { data } = await ghRequest<RawGhRepo>(
++          `/repos/${target.owner}/${target.repo}`,
++          token,
++          { signal: options.signal },
++          { onLog }
++        );
++        if (!options.includeForks && data.fork) continue;
++        if (!options.includePrivate && data.private) continue;
++        repoMap.set(data.full_name.toLowerCase(), toRepoSummary(data));
++        externalOwners.add(data.full_name.toLowerCase());
++      } catch (err) {
++        const msg = err instanceof Error ? err.message : String(err);
++        onLog(`Skipped ${slug}: ${msg}`, 'warn');
++      }
++    } else {
++      let nextUrl: string | null = `/users/${target.owner}/repos?per_page=100&type=public&sort=updated`;
++      let added = 0;
++      try {
++        while (nextUrl) {
++          if (options.signal?.aborted) throw new Error('Operation cancelled.');
++          const { data, headers } = await ghRequest<RawGhRepo[]>(
++            nextUrl,
++            token,
++            { signal: options.signal },
++            { onLog }
++          );
++          for (const r of data) {
++            if (!options.includeForks && r.fork) continue;
++            if (!matchesRepoFilter(r.full_name, options.repoFilter)) continue;
++            const key = r.full_name.toLowerCase();
++            if (!repoMap.has(key)) {
++              repoMap.set(key, toRepoSummary(r));
++              externalOwners.add(key);
++              added += 1;
++            }
++          }
++          nextUrl = parseNextLink(headers.get('Link'));
++        }
++        onLog(`Added ${added} public repos from @${target.owner}.`, 'info');
++      } catch (err) {
++        const msg = err instanceof Error ? err.message : String(err);
++        onLog(`Could not list repos for ${target.owner}: ${msg}`, 'warn');
++      }
++    }
++  }
++
++  return {
++    repos: Array.from(repoMap.values()),
++    externalOwners,
++  };
++}
++
++interface RawGhBranch {
++  name: string;
++}
++
++interface RawGhCommit {
++  sha: string;
++  html_url?: string;
++  author?: { login?: string } | null;
++  commit: {
++    message: string;
++    author?: {
++      name?: string;
++      email?: string;
++      date?: string;
++    } | null;
++  };
++}
++
++function encodeRepoFilePath(filePath: string): string {
++  return filePath
++    .split('/')
++    .map((seg) => encodeURIComponent(seg))
++    .join('/');
++}
++
++async function fetchRawEngineSource(
++  token: string,
++  repo: RepoSummary,
++  branch: string,
++  filePath: string,
++  signal?: AbortSignal
++): Promise<{ rawUrl: string; fullCode: string }> {
++  const encodedBranch = encodeURIComponent(branch);
++  const encodedPath = encodeRepoFilePath(filePath);
++  const rawUrl = `https://raw.githubusercontent.com/${repo.full_name}/${encodedBranch}/${encodedPath}`;
++  const trimmedToken = token.trim();
++
++  if (!repo.private) {
++    const res = await fetchWithTimeout(rawUrl, { signal }, GITHUB_REQUEST_TIMEOUT_MS);
++    if (res.ok) {
++      return { rawUrl, fullCode: await res.text() };
++    }
++  }
++
++  // Fallback for private repositories (or raw CDN miss) via raw GitHub Contents accept header
++  const contentsUrl = `${GITHUB_API}/repos/${repo.full_name}/contents/${encodedPath}?ref=${encodedBranch}`;
++  const apiRes = await fetchWithTimeout(
++    contentsUrl,
++    {
++      signal,
++      headers: {
++        Accept: 'application/vnd.github.raw+json',
++        ...(trimmedToken ? { Authorization: `Bearer ${trimmedToken}` } : {}),
++        'X-GitHub-Api-Version': '2022-11-28',
++      },
++    },
++    GITHUB_REQUEST_TIMEOUT_MS
++  );
++  if (!apiRes.ok) {
++    throw new Error(`HTTP ${apiRes.status} fetching ${filePath}`);
++  }
++  return { rawUrl, fullCode: await apiRes.text() };
++}
++
++export async function extractCommitsForRepo(
++  token: string,
++  repo: RepoSummary,
++  options: {
++    author: string;
++    sinceDate: string;
++    untilDate: string;
++    skipOwn: boolean;
++    includeEmails: boolean;
++    branchScope?: BranchScope;
++    siphonEngines?: boolean;
++    maxEnginesPerRepo?: number;
++    signal?: AbortSignal;
++    onLog?: LogCallback;
++    onProgress?: (progress: {
++      branchesScanned: number;
++      uniqueCommits: number;
++      enginesSiphoned: number;
++      currentBranch: string;
++      page: number;
++      stageDetail?: string;
++    }) => void;
++  }
++): Promise<{ commits: RawCommit[]; branchCount: number; engines: SiphonedEngine[] }> {
++  const defaultBranch = repo.default_branch || 'main';
++  const branchScope: BranchScope = options.branchScope ?? 'all';
++  let orderedBranches: string[] = [defaultBranch];
++
++  if (branchScope === 'first') {
++    try {
++      const { data } = await ghRequest<RawGhBranch[]>(
++        `/repos/${repo.full_name}/branches?per_page=10`,
++        token,
++        { signal: options.signal },
++        {
++          onLog: options.onLog,
++          onWait: (reason) =>
++            options.onProgress?.({
++              branchesScanned: 0,
++              uniqueCommits: 0,
++              enginesSiphoned: 0,
++              currentBranch: defaultBranch,
++              page: 1,
++              stageDetail: reason,
++            }),
++        }
++      );
++      if (data.length > 0 && data[0]?.name) {
++        orderedBranches = [data[0].name];
++      }
++    } catch {
++      orderedBranches = [defaultBranch];
++    }
++  } else if (branchScope === 'all') {
++    const branches: string[] = [];
++    let branchUrl: string | null = `/repos/${repo.full_name}/branches?per_page=100`;
++
++    try {
++      while (branchUrl) {
++        if (options.signal?.aborted) throw new Error('Operation cancelled.');
++        const { data, headers } = await ghRequest<RawGhBranch[]>(
++          branchUrl,
++          token,
++          { signal: options.signal },
++          { onLog: options.onLog }
++        );
++        for (const b of data) {
++          if (b.name !== defaultBranch) branches.push(b.name);
++        }
++        branchUrl = parseNextLink(headers.get('Link'));
++      }
++    } catch {
++      // Fall back cleanly to default branch if branches listing fails
++    }
++
++    // Always scan the repository's default branch first, followed by every other branch
++    orderedBranches = [defaultBranch, ...branches];
++  }
++
++  const commitMap = new Map<string, RawCommit>();
++  const params = new URLSearchParams({ per_page: '100' });
++  if (options.author.trim()) params.set('author', options.author.trim());
++  if (options.sinceDate) params.set('since', `${options.sinceDate}T00:00:00Z`);
++  if (options.untilDate) params.set('until', `${options.untilDate}T23:59:59Z`);
++
++  let branchesScanned = 0;
++
++  for (const branch of orderedBranches) {
++    if (options.signal?.aborted) throw new Error('Operation cancelled.');
++    branchesScanned += 1;
++    let page = 0;
++    const branchParams = new URLSearchParams(params);
++    branchParams.set('sha', branch);
++    let commitUrl: string | null = `/repos/${repo.full_name}/commits?${branchParams.toString()}`;
++
++    options.onProgress?.({
++      branchesScanned,
++      uniqueCommits: commitMap.size,
++      enginesSiphoned: 0,
++      currentBranch: branch,
++      page: 1,
++      stageDetail: `branch ${branchesScanned}/${orderedBranches.length} (${branch}) · page 1 (${commitMap.size} commits)`,
++    });
++
++    while (commitUrl) {
++      if (options.signal?.aborted) throw new Error('Operation cancelled.');
++      page += 1;
++      try {
++        const { data, headers } = await ghRequest<RawGhCommit[]>(
++          commitUrl,
++          token,
++          { signal: options.signal },
++          {
++            onLog: options.onLog,
++            onWait: (reason) =>
++              options.onProgress?.({
++                branchesScanned,
++                uniqueCommits: commitMap.size,
++                enginesSiphoned: 0,
++                currentBranch: branch,
++                page,
++                stageDetail: `branch ${branchesScanned}/${orderedBranches.length} (${branch}) · ${reason}`,
++              }),
++          }
++        );
++
++        for (const item of data) {
++          const msg = item.commit?.message ?? '';
++          if (options.skipOwn && msg.includes(TOOL_TAG)) continue;
++
++          const existing = commitMap.get(item.sha);
++          if (existing) {
++            if (!existing.branches.includes(branch)) {
++              existing.branches.push(branch);
++            }
++          } else {
++            commitMap.set(item.sha, {
++              sha: item.sha,
++              repo: repo.full_name,
++              isPrivate: repo.private,
++              branches: [branch],
++              message: msg,
++              authorName: item.commit?.author?.name || item.author?.login || 'Unknown',
++              authorLogin: item.author?.login,
++              authorEmail: options.includeEmails ? item.commit?.author?.email : undefined,
++              date: item.commit?.author?.date || new Date().toISOString(),
++              htmlUrl: item.html_url,
++              ciState: 'unknown',
++            });
++          }
++        }
++
++        options.onProgress?.({
++          branchesScanned,
++          uniqueCommits: commitMap.size,
++          enginesSiphoned: 0,
++          currentBranch: branch,
++          page,
++          stageDetail: `branch ${branchesScanned}/${orderedBranches.length} (${branch}) · page ${page} (${commitMap.size} commits)`,
++        });
++
++        commitUrl = parseNextLink(headers.get('Link'));
++      } catch (err) {
++        const msg = err instanceof Error ? err.message : String(err);
++        if (msg.includes('409') || msg.toLowerCase().includes('empty')) {
++          break;
++        }
++        throw err;
++      }
++    }
++
++    // Brief inter-branch cooldown on multi-branch repos to stay clear of secondary limits
++    if (branchesScanned < orderedBranches.length) {
++      await sleepWithAbort(150, options.signal);
++    }
++  }
++
++  const commitList = Array.from(commitMap.values());
++  const engines: SiphonedEngine[] = [];
++
++  if (options.siphonEngines !== false) {
++    const targetBranch = orderedBranches[0] || defaultBranch;
++    try {
++      options.onProgress?.({
++        branchesScanned,
++        uniqueCommits: commitList.length,
++        enginesSiphoned: 0,
++        currentBranch: targetBranch,
++        page: 1,
++        stageDetail: `siphoning engines (${targetBranch})`,
++      });
++
++      const { data: treeData } = await ghRequest<{ tree?: GitTreeNode[]; truncated?: boolean }>(
++        `/repos/${repo.full_name}/git/trees/${encodeURIComponent(targetBranch)}?recursive=1`,
++        token,
++        { signal: options.signal },
++        { onLog: options.onLog }
++      );
++
++      const selectedNodes = selectEngineTreePaths(
++        treeData.tree ?? [],
++        options.maxEnginesPerRepo ?? 12
++      );
++
++      for (let i = 0; i < selectedNodes.length; i += 1) {
++        if (options.signal?.aborted) throw new Error('Operation cancelled.');
++        const node = selectedNodes[i];
++        try {
++          const { rawUrl, fullCode } = await fetchRawEngineSource(
++            token,
++            repo,
++            targetBranch,
++            node.path,
++            options.signal
++          );
++          const record = buildUnredactedEngineRecord({
++            repo: repo.full_name,
++            branch: targetBranch,
++            filePath: node.path,
++            rawUrl,
++            treeSha: node.sha,
++            fullCode,
++            repoCommits: commitList,
++          });
++          engines.push(record);
++          options.onProgress?.({
++            branchesScanned,
++            uniqueCommits: commitList.length,
++            enginesSiphoned: engines.length,
++            currentBranch: targetBranch,
++            page: 1,
++            stageDetail: `siphoned engine ${i + 1}/${selectedNodes.length}: ${node.path}`,
++          });
++          if (i + 1 < selectedNodes.length) {
++            await sleepWithAbort(120, options.signal);
++          }
++        } catch (fileErr) {
++          const msg = fileErr instanceof Error ? fileErr.message : String(fileErr);
++          options.onLog?.(`Skipped engine ${repo.full_name}/${node.path}: ${msg}`, 'warn');
++        }
++      }
++    } catch (treeErr) {
++      const msg = treeErr instanceof Error ? treeErr.message : String(treeErr);
++      if (!msg.includes('409') && !msg.toLowerCase().includes('empty')) {
++        options.onLog?.(`Engine siphon skipped for ${repo.full_name}: ${msg}`, 'warn');
++      }
++    }
++  }
++
++  return {
++    commits: commitList,
++    branchCount: branchesScanned,
++    engines,
++  };
++}
++
++export async function lookupCommitCiState(
++  token: string,
++  repoFullName: string,
++  sha: string,
++  signal?: AbortSignal,
++  onLog?: LogCallback
++): Promise<CiState> {
++  try {
++    const { data: checks } = await ghRequest<{
++      total_count: number;
++      check_runs: Array<{ status: string; conclusion: string | null }>;
++    }>(
++      `/repos/${repoFullName}/commits/${sha}/check-runs?per_page=30`,
++      token,
++      { signal },
++      { onLog }
++    );
++
++    if (checks.total_count > 0 && checks.check_runs.length > 0) {
++      const conclusions = checks.check_runs.map((r) => r.conclusion);
++      if (
++        conclusions.some((c) =>
++          ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(c || '')
++        )
++      ) {
++        return 'failure';
++      }
++      if (checks.check_runs.some((r) => r.status !== 'completed')) {
++        return 'pending';
++      }
++      if (conclusions.every((c) => ['success', 'neutral', 'skipped'].includes(c || ''))) {
++        return 'success';
++      }
++    }
++
++    const { data: status } = await ghRequest<{ state: string }>(
++      `/repos/${repoFullName}/commits/${sha}/status`,
++      token,
++      { signal },
++      { onLog }
++    );
++    if (status.state === 'failure' || status.state === 'error') return 'failure';
++    if (status.state === 'success') return 'success';
++    if (status.state === 'pending') return 'pending';
++    return 'unknown';
++  } catch {
++    return 'unknown';
++  }
++}
++
++function encodeBase64Utf8(content: string): string {
++  const bytes = new TextEncoder().encode(content);
++  let binary = '';
++  for (let i = 0; i < bytes.length; i += 1) {
++    binary += String.fromCharCode(bytes[i]);
++  }
++  return btoa(binary);
++}
++
++export async function pushSplitArchivesToGitHub(
++  token: string,
++  params: {
++    repo: string;
++    branch: string;
++    autoCreatePrivate: boolean;
++    files: Array<{ path: string; content: string; label: string }>;
++  },
++  onLog: LogCallback
++): Promise<void> {
++  const [owner, repoName] = params.repo.split('/');
++
++  let repoExists = true;
++  try {
++    await ghRequest(`/repos/${params.repo}`, token, {}, { onLog });
++  } catch {
++    repoExists = false;
++  }
++
++  if (!repoExists) {
++    if (!params.autoCreatePrivate) {
++      throw new Error(`Destination repository ${params.repo} does not exist.`);
++    }
++    onLog(`Creating private repository ${params.repo}...`, 'info');
++    await ghRequest(
++      '/user/repos',
++      token,
++      {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          name: repoName,
++          private: true,
++          auto_init: true,
++          description: `Commit history archive created ${TOOL_TAG}`,
++        }),
++      },
++      { onLog }
++    );
++    onLog(`Created private repository ${owner}/${repoName}.`, 'success');
++  }
++
++  for (const file of params.files) {
++    let existingSha: string | undefined;
++    try {
++      const { data } = await ghRequest<{ sha?: string }>(
++        `/repos/${params.repo}/contents/${encodeURIComponent(file.path).replace(/%2F/g, '/')}?ref=${encodeURIComponent(params.branch)}`,
++        token,
++        {},
++        { onLog }
++      );
++      existingSha = data.sha;
++    } catch {
++      existingSha = undefined;
++    }
++
++    await ghRequest(
++      `/repos/${params.repo}/contents/${encodeURIComponent(file.path).replace(/%2F/g, '/')}`,
++      token,
++      {
++        method: 'PUT',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          message: `chore(archive): sync ${file.label} commit log ${TOOL_TAG}`,
++          content: encodeBase64Utf8(file.content),
++          branch: params.branch,
++          ...(existingSha ? { sha: existingSha } : {}),
++        }),
++      },
++      { onLog }
++    );
++    onLog(`Pushed ${file.path} to ${params.repo}@${params.branch}.`, 'success');
++  }
++}
+diff --git a/src/utils/offlineStore.ts b/src/utils/offlineStore.ts
+new file mode 100644
+index 0000000..7e94336
+--- /dev/null
++++ b/src/utils/offlineStore.ts
+@@ -0,0 +1,118 @@
++import type {
++  ActivityEntry,
++  ClassifiedCommit,
++  FetchStats,
++  SiphonedEngine,
++} from '../types/git';
++
++export interface OfflineWorkspaceSnapshot {
++  savedAt: string;
++  stats: FetchStats;
++  commits: ClassifiedCommit[];
++  engines: SiphonedEngine[];
++  logs: ActivityEntry[];
++}
++
++const DB_NAME = 'githistory_sync_offline_db';
++const DB_VERSION = 1;
++const STORE_NAME = 'snapshots';
++const SNAPSHOT_KEY = 'latest';
++
++function openOfflineDb(): Promise<IDBDatabase | null> {
++  if (typeof indexedDB === 'undefined') {
++    return Promise.resolve(null);
++  }
++
++  return new Promise((resolve) => {
++    try {
++      const request = indexedDB.open(DB_NAME, DB_VERSION);
++      request.onupgradeneeded = () => {
++        const db = request.result;
++        if (!db.objectStoreNames.contains(STORE_NAME)) {
++          db.createObjectStore(STORE_NAME);
++        }
++      };
++      request.onsuccess = () => resolve(request.result);
++      request.onerror = () => resolve(null);
++      request.onblocked = () => resolve(null);
++    } catch {
++      resolve(null);
++    }
++  });
++}
++
++export async function saveOfflineSnapshot(snapshot: OfflineWorkspaceSnapshot): Promise<boolean> {
++  const db = await openOfflineDb();
++  if (!db) return false;
++
++  return new Promise((resolve) => {
++    try {
++      const tx = db.transaction(STORE_NAME, 'readwrite');
++      const store = tx.objectStore(STORE_NAME);
++      store.put(snapshot, SNAPSHOT_KEY);
++      tx.oncomplete = () => {
++        db.close();
++        resolve(true);
++      };
++      tx.onerror = () => {
++        db.close();
++        resolve(false);
++      };
++    } catch {
++      db.close();
++      resolve(false);
++    }
++  });
++}
++
++export async function loadOfflineSnapshot(): Promise<OfflineWorkspaceSnapshot | null> {
++  const db = await openOfflineDb();
++  if (!db) return null;
++
++  return new Promise((resolve) => {
++    try {
++      const tx = db.transaction(STORE_NAME, 'readonly');
++      const store = tx.objectStore(STORE_NAME);
++      const req = store.get(SNAPSHOT_KEY);
++      req.onsuccess = () => {
++        const res = req.result as OfflineWorkspaceSnapshot | undefined;
++        db.close();
++        if (res && Array.isArray(res.commits) && Array.isArray(res.engines)) {
++          resolve(res);
++        } else {
++          resolve(null);
++        }
++      };
++      req.onerror = () => {
++        db.close();
++        resolve(null);
++      };
++    } catch {
++      db.close();
++      resolve(null);
++    }
++  });
++}
++
++export async function clearOfflineSnapshot(): Promise<void> {
++  const db = await openOfflineDb();
++  if (!db) return;
++
++  await new Promise<void>((resolve) => {
++    try {
++      const tx = db.transaction(STORE_NAME, 'readwrite');
++      tx.objectStore(STORE_NAME).delete(SNAPSHOT_KEY);
++      tx.oncomplete = () => {
++        db.close();
++        resolve();
++      };
++      tx.onerror = () => {
++        db.close();
++        resolve();
++      };
++    } catch {
++      db.close();
++      resolve();
++    }
++  });
++}
+diff --git a/src/utils/rateLimiter.ts b/src/utils/rateLimiter.ts
+new file mode 100644
+index 0000000..f34c29d
+--- /dev/null
++++ b/src/utils/rateLimiter.ts
+@@ -0,0 +1,182 @@
++export interface GitHubRateInput {
++  status?: number;
++  remainingHeader: string | null;
++  resetHeader: string | null;
++  retryAfterHeader: string | null;
++  isAuthenticated: boolean;
++  nowMs?: number;
++}
++
++export interface CooldownDecision {
++  waitMs: number;
++  reason?: string;
++  shouldRetry: boolean;
++  fatalError?: string;
++}
++
++const MAX_AUTO_WAIT_MS = 120_000;
++
++/**
++ * Computes pacing and rate-limit recovery cooldowns for GitHub REST API requests.
++ */
++export function computeGitHubCooldown(input: GitHubRateInput): CooldownDecision {
++  const now = input.nowMs ?? Date.now();
++  const remaining =
++    input.remainingHeader !== null && input.remainingHeader !== ''
++      ? Number(input.remainingHeader)
++      : null;
++  const resetEpochSec =
++    input.resetHeader !== null && input.resetHeader !== '' ? Number(input.resetHeader) : null;
++  const retryAfterSec =
++    input.retryAfterHeader !== null && input.retryAfterHeader !== ''
++      ? Number(input.retryAfterHeader)
++      : null;
++
++  // Hard rate-limit or secondary abuse response
++  if (input.status === 403 || input.status === 429) {
++    if (retryAfterSec !== null && !Number.isNaN(retryAfterSec) && retryAfterSec > 0) {
++      const waitMs = Math.ceil(retryAfterSec * 1000) + 250;
++      if (waitMs <= MAX_AUTO_WAIT_MS) {
++        return {
++          waitMs,
++          shouldRetry: true,
++          reason: `GitHub Retry-After header requested a ${Math.ceil(waitMs / 1000)}s cooldown.`,
++        };
++      }
++      return {
++        waitMs: 0,
++        shouldRetry: false,
++        fatalError: `GitHub rate limit cooldown (${Math.ceil(waitMs / 1000)}s) exceeds 120s auto-wait limit.`,
++      };
++    }
++
++    if (remaining === 0 && resetEpochSec !== null && !Number.isNaN(resetEpochSec)) {
++      const waitMs = Math.max(1000, resetEpochSec * 1000 - now + 500);
++      if (waitMs <= MAX_AUTO_WAIT_MS) {
++        return {
++          waitMs,
++          shouldRetry: true,
++          reason: `GitHub primary rate limit exhausted — cooling down ${Math.ceil(waitMs / 1000)}s until reset.`,
++        };
++      }
++      const resetTime = new Date(resetEpochSec * 1000).toLocaleTimeString();
++      return {
++        waitMs: 0,
++        shouldRetry: false,
++        fatalError: `GitHub API rate limit exhausted until ${resetTime}. Add a personal access token or retry after reset.`,
++      };
++    }
++
++    // Secondary rate limit without Retry-After header (GitHub uses both 429 and 403 with remaining > 0)
++    if (input.status === 429 || (input.status === 403 && remaining !== 0)) {
++      return {
++        waitMs: input.status === 403 ? 8000 : 5000,
++        shouldRetry: true,
++        reason: `GitHub secondary rate limit (HTTP ${input.status}) — cooling down ${input.status === 403 ? 8 : 5}s before retry.`,
++      };
++    }
++  }
++
++  // Proactive pacing based on remaining quota
++  if (remaining !== null && !Number.isNaN(remaining)) {
++    if (remaining === 0 && resetEpochSec !== null && !Number.isNaN(resetEpochSec)) {
++      const waitMs = Math.max(1000, resetEpochSec * 1000 - now + 500);
++      if (waitMs <= MAX_AUTO_WAIT_MS) {
++        return {
++          waitMs,
++          shouldRetry: false,
++          reason: `GitHub quota reached 0 — cooling down ${Math.ceil(waitMs / 1000)}s until reset.`,
++        };
++      }
++    }
++    if (remaining < 20) {
++      return {
++        waitMs: 1500,
++        shouldRetry: false,
++        reason: `GitHub quota low (${remaining} remaining) — slowing pace to 1.5s/request.`,
++      };
++    }
++    if (remaining < 100) {
++      return { waitMs: 450, shouldRetry: false };
++    }
++  }
++
++  // Baseline polite cooldown
++  return {
++    waitMs: input.isAuthenticated ? 180 : 1100,
++    shouldRetry: false,
++  };
++}
++
++/**
++ * Computes inter-batch and retry cooldowns for LLM API calls (Gemini / NVIDIA NIM).
++ */
++export function computeAiBatchCooldownMs(attempt = 0, retryAfterSec?: number | null): number {
++  if (attempt === 0) {
++    return 1200; // Decent 1.2s cooldown between consecutive LLM batches
++  }
++  if (retryAfterSec && retryAfterSec > 0) {
++    return Math.min(30_000, Math.ceil(retryAfterSec * 1000) + 300);
++  }
++  return Math.min(20_000, 2500 * Math.pow(2, attempt - 1));
++}
++
++export async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
++  if (ms <= 0) return;
++  if (signal?.aborted) throw new Error('Operation cancelled.');
++  await new Promise<void>((resolve, reject) => {
++    const timer = setTimeout(() => {
++      signal?.removeEventListener('abort', onAbort);
++      resolve();
++    }, ms);
++    const onAbort = () => {
++      clearTimeout(timer);
++      reject(new Error('Operation cancelled.'));
++    };
++    signal?.addEventListener('abort', onAbort, { once: true });
++  });
++}
++
++/**
++ * Wraps fetch with an automatic timeout while respecting a caller-supplied AbortSignal
++ * so stalled network sockets never freeze an extraction run.
++ */
++export async function fetchWithTimeout(
++  url: string,
++  init: RequestInit = {},
++  timeoutMs = 30_000
++): Promise<Response> {
++  const controller = new AbortController();
++  let timedOut = false;
++  const callerSignal = init.signal ?? undefined;
++
++  if (callerSignal?.aborted) {
++    throw new Error('Operation cancelled.');
++  }
++
++  const onCallerAbort = () => controller.abort();
++  callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
++
++  const timer = setTimeout(() => {
++    timedOut = true;
++    controller.abort();
++  }, timeoutMs);
++
++  try {
++    return await fetch(url, {
++      ...init,
++      signal: controller.signal,
++    });
++  } catch (err) {
++    if (timedOut) {
++      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
++    }
++    if (callerSignal?.aborted) {
++      throw new Error('Operation cancelled.');
++    }
++    throw err;
++  } finally {
++    clearTimeout(timer);
++    callerSignal?.removeEventListener('abort', onCallerAbort);
++  }
++}
+diff --git a/src/utils/sources.ts b/src/utils/sources.ts
+new file mode 100644
+index 0000000..3911fab
+--- /dev/null
++++ b/src/utils/sources.ts
+@@ -0,0 +1,175 @@
++import type { ArchiveFormat } from '../types/git';
++
++export interface TopPreset {
++  value: string;
++  label: string;
++}
++
++export const CURATED_PRESETS: TopPreset[] = [
++  { value: 'craighckby-stack', label: '#1 craighckby-stack (Your account)' },
++  { value: 'infiniflow/ragflow', label: '#2 infiniflow/ragflow (Largest open-source RAG system)' },
++  { value: 'torvalds/linux', label: '#3 torvalds/linux (Most-committed Linux kernel)' },
++  { value: 'microsoft/vscode', label: '#4 microsoft/vscode (Top committed editor)' },
++  { value: 'vercel/next.js', label: '#5 vercel/next.js (Top committed web framework)' },
++  { value: 'facebook/react', label: '#6 facebook/react (Core UI library)' },
++  { value: 'huggingface/transformers', label: '#7 huggingface/transformers (Top committed AI/ML hub)' },
++  { value: 'kubernetes/kubernetes', label: '#8 kubernetes/kubernetes (Cloud infrastructure)' },
++  { value: 'python/cpython', label: '#9 python/cpython (Python runtime)' },
++  { value: 'rust-lang/rust', label: '#10 rust-lang/rust (Rust compiler)' },
++  { value: 'IBM/mcp-context-forge', label: '#11 IBM/mcp-context-forge (IBM — Enterprise AI & MCP forge)' },
++  { value: 'deepseek-ai/DeepSeek-V3', label: '#12 deepseek-ai/DeepSeek-V3 (DeepSeek — Flagship LLM)' },
++  { value: 'google-deepmind/deepmind-research', label: '#13 google-deepmind/deepmind-research (DeepMind — Research archive)' },
++  { value: 'trekhleb/javascript-algorithms', label: '#14 trekhleb/javascript-algorithms (JavaScript — Core JS algorithms)' },
++  { value: 'firebase/firebase-js-sdk', label: '#15 firebase/firebase-js-sdk (Firebase — Official JS SDK)' },
++  { value: 'langchain-ai/langchain', label: '#16 langchain-ai/langchain (Huge RAG — LangChain framework)' },
++  { value: 'run-llama/llama_index', label: '#17 run-llama/llama_index (Huge RAG — LlamaIndex framework)' },
++  { value: 'langgenius/dify', label: '#18 langgenius/dify (Huge RAG — Dify LLM & RAG platform)' },
++  { value: 'open-webui/open-webui', label: '#19 open-webui/open-webui (Huge RAG — Open WebUI RAG workspace)' },
++  { value: 'Mintplex-Labs/anything-llm', label: '#20 Mintplex-Labs/anything-llm (Huge RAG — AnythingLLM private RAG)' },
++  { value: 'FlowiseAI/Flowise', label: '#21 FlowiseAI/Flowise (Huge RAG — Visual RAG & agent builder)' },
++  { value: 'HKUDS/LightRAG', label: '#22 HKUDS/LightRAG (Huge RAG — Graph-enhanced LightRAG)' },
++  { value: 'deepset-ai/haystack', label: '#23 deepset-ai/haystack (Huge RAG — Haystack RAG pipelines)' },
++];
++
++export const TOP_10_PRESETS: TopPreset[] = CURATED_PRESETS;
++
++export const TOOL_TAG = 'via GitHistory Sync';
++export const DEFAULT_BASE_PATH = 'memory/commit-history.json';
++
++export interface ParsedSource {
++  type: 'repo' | 'owner';
++  owner: string;
++  repo?: string;
++  raw: string;
++}
++
++/**
++ * Parses comma- or newline-separated GitHub usernames, orgs, owner/repo slugs,
++ * or full GitHub URLs into normalized, deduplicated targets.
++ */
++export function parseSources(input: string): ParsedSource[] {
++  const tokens = input
++    .split(/[\n,]+/)
++    .map((s) => s.trim())
++    .filter(Boolean);
++
++  const seen = new Set<string>();
++  const results: ParsedSource[] = [];
++
++  for (let token of tokens) {
++    // Strip trailing .git or URL prefixes
++    token = token.replace(/^https?:\/\/(www\.)?github\.com\//i, '');
++    token = token.replace(/\.git$/i, '');
++    token = token.replace(/^\/+|\/+$/g, '');
++    if (!token) continue;
++
++    const parts = token.split('/').filter(Boolean);
++    if (parts.length >= 2) {
++      const owner = parts[0];
++      const repo = parts[1];
++      const key = `${owner.toLowerCase()}/${repo.toLowerCase()}`;
++      if (!seen.has(key)) {
++        seen.add(key);
++        results.push({ type: 'repo', owner, repo, raw: `${owner}/${repo}` });
++      }
++    } else if (parts.length === 1) {
++      const owner = parts[0];
++      const key = owner.toLowerCase();
++      if (!seen.has(key)) {
++        seen.add(key);
++        results.push({ type: 'owner', owner, raw: owner });
++      }
++    }
++  }
++
++  return results;
++}
++
++/**
++ * Appends new preset tokens to an existing sources string without duplicating entries.
++ */
++export function appendPresetToSources(existing: string, additions: string[]): string {
++  const current = parseSources(existing);
++  const existingKeys = new Set(current.map((c) => c.raw.toLowerCase()));
++  const merged = current.map((c) => c.raw);
++
++  for (const add of additions) {
++    const parsed = parseSources(add);
++    for (const item of parsed) {
++      const key = item.raw.toLowerCase();
++      if (!existingKeys.has(key)) {
++        existingKeys.add(key);
++        merged.push(item.raw);
++      }
++    }
++  }
++
++  return merged.join(', ');
++}
++
++/**
++ * Validates destination repository, branch, and file path.
++ * Throws a descriptive Error if invalid.
++ */
++export function validateDestination(repo: string, branch: string, filePath: string): void {
++  const trimmedRepo = repo.trim();
++  const trimmedBranch = branch.trim();
++  const trimmedPath = filePath.trim();
++
++  if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(trimmedRepo)) {
++    throw new Error('Repository must look like "owner/repository" (for example craighckby-stack/V1).');
++  }
++  if (!trimmedBranch || /\s/.test(trimmedBranch)) {
++    throw new Error('Branch name cannot be empty or contain spaces.');
++  }
++  if (!trimmedPath || trimmedPath.startsWith('/') || trimmedPath.endsWith('/')) {
++    throw new Error(`File path must point to a relative file (for example ${DEFAULT_BASE_PATH}).`);
++  }
++  for (const seg of trimmedPath.split('/')) {
++    if (!seg || seg === '.' || seg === '..') {
++      throw new Error(`Invalid path segment "${seg}".`);
++    }
++  }
++}
++
++/**
++ * Derives the split archive file paths (.successful.<ext>, .failed.<ext>, .engines.<ext>) from a base path and format.
++ */
++export function deriveLogPaths(
++  basePath: string,
++  format: ArchiveFormat
++): { successful: string; failed: string; engines: string } {
++  const extMap: Record<ArchiveFormat, string> = {
++    json: 'json',
++    markdown: 'md',
++    csv: 'csv',
++  };
++  const ext = extMap[format];
++  const clean = (basePath.trim() || DEFAULT_BASE_PATH).replace(/^\/+/, '');
++  const lastSlash = clean.lastIndexOf('/');
++  const dir = lastSlash >= 0 ? clean.slice(0, lastSlash + 1) : '';
++  const file = lastSlash >= 0 ? clean.slice(lastSlash + 1) : clean;
++  const stem =
++    file
++      .replace(/\.(json|md|markdown|csv)$/i, '')
++      .replace(/\.(successful|failed|engines)$/i, '') || 'commit-history';
++
++  return {
++    successful: `${dir}${stem}.successful.${ext}`,
++    failed: `${dir}${stem}.failed.${ext}`,
++    engines: `${dir}${stem}.engines.${ext}`,
++  };
++}
++
++/**
++ * Filters repositories by comma-separated substring patterns.
++ */
++export function matchesRepoFilter(fullName: string, filterText: string): boolean {
++  const tokens = filterText
++    .split(/[\n,]+/)
++    .map((s) => s.trim().toLowerCase())
++    .filter(Boolean);
++  if (tokens.length === 0) return true;
++  const target = fullName.toLowerCase();
++  return tokens.some((tok) => target.includes(tok));
++}
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..fca2349
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,28 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "experimentalDecorators": true,
++    "useDefineForClassFields": false,
++    "module": "ESNext",
++    "types": ["vite/client"],
++    "lib": [
++      "ES2022",
++      "DOM",
++      "DOM.Iterable"
++    ],
++    "skipLibCheck": true,
++    "moduleResolution": "bundler",
++    "isolatedModules": true,
++    "moduleDetection": "force",
++    "allowJs": true,
++    "jsx": "react-jsx",
++    "paths": {
++      "@/*": [
++        "./*"
++      ]
++    },
++    "allowImportingTsExtensions": true,
++    "noEmit": true
++  },
++  "exclude": ["dist"]
++}
+diff --git a/vite.config.ts b/vite.config.ts
+new file mode 100644
+index 0000000..8f86cd0
+--- /dev/null
++++ b/vite.config.ts
+@@ -0,0 +1,44 @@
++import tailwindcss from '@tailwindcss/vite';
++import react from '@vitejs/plugin-react';
++import fs from 'fs';
++import path from 'path';
++import {defineConfig} from 'vite';
++
++export default defineConfig(() => {
++  return {
++    plugins: [
++      react(),
++      tailwindcss(),
++      // Copies src/assets into dist/ so root-relative URLs like
++      // "/src/assets/images/..." (e.g. generate_image output) still resolve
++      // in production builds. Do not remove.
++      {
++        name: 'copy-unbundled-src-assets',
++        apply: 'build',
++        closeBundle(error?: Error): void {
++          if (error) {
++            return;
++          }
++          const distDir = path.resolve(__dirname, 'dist');
++          const srcAssets = path.resolve(__dirname, 'src/assets');
++          const distAssets = path.resolve(distDir, 'src/assets');
++          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
++            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
++          }
++        },
++      },
++    ],
++    resolve: {
++      alias: {
++        '@': path.resolve(__dirname, '.'),
++      },
++    },
++    server: {
++      // HMR is disabled in AI Studio via DISABLE_HMR env var.
++      // Do not modify—file watching is disabled to prevent flickering during agent edits.
++      hmr: process.env.DISABLE_HMR !== 'true',
++      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
++      watch: process.env.DISABLE_HMR === 'true' ? null : {},
++    },
++  };
++});
+```
